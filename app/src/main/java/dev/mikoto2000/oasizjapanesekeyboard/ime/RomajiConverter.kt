@@ -104,9 +104,8 @@ class RomajiConverter {
     }
 
     fun getComposing(): String {
-        // Show produced kana only; do not show raw pending romaji, except lone 'n' can be tentatively seen as ん?
-        // To avoid flicker, keep it simple: only produced + tentative 'ん' if buffer is exactly "n".
-        return if (buffer.toString() == "n") produced.toString() + "ん" else produced.toString()
+        // Show produced kana and any pending raw romaji so consonants are visible while composing.
+        return produced.toString() + buffer.toString()
     }
 
     fun flush(): String {
