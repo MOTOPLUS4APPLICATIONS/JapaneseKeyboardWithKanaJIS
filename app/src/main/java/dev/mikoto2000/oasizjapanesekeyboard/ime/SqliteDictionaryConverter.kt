@@ -11,23 +11,34 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
     private val dbFile: File by lazy {
         File(context.filesDir, "dictionary/words.db")
     }
+    private val initLock = Any()
+    @Volatile private var dbReady = false
 
     // Ensure DB exists: copy from assets if available; otherwise build from TSV asset.
     private fun ensureDb() {
-        if (!dbFile.exists()) {
-            dbFile.parentFile?.mkdirs()
-            // Try copy prebuilt DB from assets
-            if (assetExists("dictionary/words.db")) {
-                copyAssetToFile("dictionary/words.db", dbFile)
-            } else if (assetExists("dictionary/words.tsv")) {
-                // Fallback: build from TSV asset (costly for large files; recommended to prepackage DB)
-                buildDbFromTsv("dictionary/words.tsv", dbFile)
-            } else {
-                // Nothing available; create empty DB
-                createSchema(dbFile)
+        if (dbReady && dbFile.exists()) return
+        synchronized(initLock) {
+            if (dbReady && dbFile.exists()) return
+            if (!dbFile.exists()) {
+                dbFile.parentFile?.mkdirs()
+                // Try copy prebuilt DB from assets
+                if (assetExists("dictionary/words.db")) {
+                    copyAssetToFile("dictionary/words.db", dbFile)
+                } else if (assetExists("dictionary/words.tsv")) {
+                    // Fallback: build from TSV asset (costly for large files; recommended to prepackage DB)
+                    buildDbFromTsv("dictionary/words.tsv", dbFile)
+                } else {
+                    // Nothing available; create empty DB
+                    createSchema(dbFile)
+                }
             }
+            ensureAuxSchema()
+            dbReady = true
         }
-        ensureAuxSchema()
+    }
+
+    fun preload() {
+        ensureDb()
     }
 
 

@@ -43,6 +43,7 @@ class JapaneseKeyboardService : InputMethodService() {
     private var converter: JapaneseConverter = SimpleConverter()
     private val convExecutor = Executors.newSingleThreadExecutor()
     private var convQuerySeq: Long = 0L
+    private var sqliteConverter: SqliteDictionaryConverter? = null
 
     // Segment conversion state
     private data class Segment(
@@ -83,14 +84,31 @@ class JapaneseKeyboardService : InputMethodService() {
         "\\" to "_"
     )
 
+    override fun onCreate() {
+        super.onCreate()
+        sqliteConverter = try {
+            SqliteDictionaryConverter(this).also { converter ->
+                convExecutor.execute {
+                    try {
+                        converter.preload()
+                    } catch (_: Exception) {
+                        // ignore and fallback at query time if needed
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     override fun onCreateInputView(): View {
         val root = layoutInflater.inflate(R.layout.keyboard_jis_qwerty, null)
         rootViewRef = root
         // Initialize converter: prefer SQLite dictionary; fallback to TSV; then to simple built-in
-        converter = try {
-            SqliteDictionaryConverter(this)
-        } catch (e: Exception) {
+        converter = sqliteConverter ?: try {
             DictionaryConverter(this)
+        } catch (_: Exception) {
+            SimpleConverter()
         }
 
         // Wire generic keys by tag
