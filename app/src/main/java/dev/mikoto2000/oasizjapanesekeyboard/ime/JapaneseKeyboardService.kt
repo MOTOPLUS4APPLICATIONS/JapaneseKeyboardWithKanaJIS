@@ -897,7 +897,13 @@ class JapaneseKeyboardService : InputMethodService() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
+        try {
+            sqliteConverter?.close()
+        } catch (_: Exception) {
+        } finally {
+            sqliteConverter = null
+        }
         convExecutor.shutdownNow()
+        super.onDestroy()
     }
 }

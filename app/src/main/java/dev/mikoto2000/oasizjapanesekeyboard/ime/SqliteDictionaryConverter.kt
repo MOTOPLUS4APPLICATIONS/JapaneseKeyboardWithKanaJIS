@@ -13,6 +13,7 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
     }
     private val initLock = Any()
     @Volatile private var dbReady = false
+    @Volatile private var readDb: SQLiteDatabase? = null
 
     // Ensure DB exists: copy from assets if available; otherwise build from TSV asset.
     private fun ensureDb() {
@@ -39,6 +40,14 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
 
     fun preload() {
         ensureDb()
+        openReadDb()
+    }
+
+    fun close() {
+        synchronized(initLock) {
+            readDb?.close()
+            readDb = null
+        }
     }
 
 
@@ -51,7 +60,7 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
         out += readingHiragana
         out += hiraganaToKatakana(readingHiragana)
 
-        val db = SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READONLY)
+        val db = openReadDb()
         try {
             // Exact with learning priority
             db.rawQuery(
@@ -76,7 +85,7 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
                 }
             }
         } finally {
-            db.close()
+            // keep db open for reuse
         }
         if (out.size <= 2) out.addAll(SimpleConverter().query(readingHiragana))
         return out.toList()
@@ -194,6 +203,22 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
         } finally {
             db.endTransaction()
             db.close()
+        }
+    }
+
+    private fun openReadDb(): SQLiteDatabase {
+        val current = readDb
+        if (current != null && current.isOpen) return current
+        synchronized(initLock) {
+            val cached = readDb
+            if (cached != null && cached.isOpen) return cached
+            val db = SQLiteDatabase.openDatabase(
+                dbFile.path,
+                null,
+                SQLiteDatabase.OPEN_READONLY or SQLiteDatabase.NO_LOCALIZED_COLLATORS
+            )
+            readDb = db
+            return db
         }
     }
 }
