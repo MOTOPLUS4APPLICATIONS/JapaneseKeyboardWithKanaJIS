@@ -1,4 +1,4 @@
-package dev.mikoto2000.oasizjapanesekeyboard
+package dev.moto4app.J_KeyboardKanaPlus
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -19,6 +19,6 @@ class ExampleInstrumentedTest {
     fun useAppContext() {
         // Context of the app under test.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("dev.mikoto2000.oasizjapanesekeyboard", appContext.packageName)
+        assertEquals("dev.moto4app.J_KeyboardKanaPlus", appContext.packageName)
     }
 }

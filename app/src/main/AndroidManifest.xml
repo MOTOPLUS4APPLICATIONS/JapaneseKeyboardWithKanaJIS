@@ -10,7 +10,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.OasizJapaneseKeyboard">
+        android:theme="@style/Theme.J_KeyboardKanaPlus">
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -21,7 +21,7 @@
             </intent-filter>
         </activity>
         <activity
-            android:name="dev.mikoto2000.oasizjapanesekeyboard.ui.LicenseActivity"
+            android:name="dev.moto4app.J_KeyboardKanaPlus.ui.LicenseActivity"
             android:exported="false" />
         <service
             android:name=".ime.JapaneseKeyboardService"

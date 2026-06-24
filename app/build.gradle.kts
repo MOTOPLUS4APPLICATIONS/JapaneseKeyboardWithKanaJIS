@@ -19,11 +19,11 @@ buildscript {
 }
 
 android {
-    namespace = "dev.mikoto2000.oasizjapanesekeyboard"
+    namespace = "dev.moto4app.J_KeyboardKanaPlus"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "dev.mikoto2000.oasizjapanesekeyboard"
+        applicationId = "dev.moto4app.J_KeyboardKanaPlus"
         minSdk = 28
         targetSdk = 36
         versionCode = 1

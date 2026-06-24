@@ -1,4 +1,4 @@
-package dev.mikoto2000.oasizjapanesekeyboard.ime
+package dev.moto4app.J_KeyboardKanaPlus.ime
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase

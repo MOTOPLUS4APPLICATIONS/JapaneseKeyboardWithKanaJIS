@@ -1,4 +1,14 @@
-package dev.mikoto2000.oasizjapanesekeyboard.ime
+/*
+    All Rights Reserved, Copyright (C) 2025, mikoto2000
+      Licensed Material of mikoto2000.
+
+    All Rights Reserved, Copyright (C) 2026, Moto+4 Applications LLC
+      Licensed Material of Moto+4 Applications LLC.
+ */
+
+package dev.moto4app.J_KeyboardKanaPlus.ime
+
+import kotlin.arrayOf
 
 /**
  * Simple streaming Romaji -> Kana converter for IME composing.
@@ -79,6 +89,75 @@ class RomajiConverter {
         "xa" to "ぁ", "xi" to "ぃ", "xu" to "ぅ", "xe" to "ぇ", "xo" to "ぉ"
     )
 
+    data class dakutenToMoji (
+        var  seion : String,    // ex) た
+        var  dakuon : String    // ex) だ
+    )
+
+    private val HiraganaDakutenToMojiMap = arrayOf(
+        // NOTE: Not assgin "う" + "゛"  in UTF-8.
+        dakutenToMoji( "か", "が" ),
+        dakutenToMoji( "き", "ぎ" ),
+        dakutenToMoji( "く", "ぐ" ),
+        dakutenToMoji( "け", "げ" ),
+        dakutenToMoji( "こ", "ご" ),
+        dakutenToMoji( "さ", "ざ" ),
+        dakutenToMoji( "し", "じ" ),
+        dakutenToMoji( "す", "ず" ),
+        dakutenToMoji( "せ", "ぜ" ),
+        dakutenToMoji( "そ", "ぞ" ),
+        dakutenToMoji( "た", "だ" ),
+        dakutenToMoji( "ち", "ぢ" ),
+        dakutenToMoji( "つ", "づ" ),
+        dakutenToMoji( "て", "で" ),
+        dakutenToMoji( "と", "ど" ),
+        dakutenToMoji( "は", "ば" ),
+        dakutenToMoji( "ひ", "び" ),
+        dakutenToMoji( "ふ", "ぶ" ),
+        dakutenToMoji( "へ", "べ" ),
+        dakutenToMoji( "ほ", "ぼ" ),
+    )
+
+    private val HiraganaHandakutenToMojiMap = arrayOf(
+        dakutenToMoji( "は", "ぱ" ),
+        dakutenToMoji( "ひ", "ぴ" ),
+        dakutenToMoji( "ふ", "ぷ" ),
+        dakutenToMoji( "へ", "ぺ" ),
+        dakutenToMoji( "ほ", "ぽ" ),
+    )
+
+    private val KatakanaDakutenToMojiMap = arrayOf(
+        dakutenToMoji( "ウ", "ヴ" ),
+        dakutenToMoji( "カ", "ガ" ),
+        dakutenToMoji( "キ", "ギ" ),
+        dakutenToMoji( "ク", "グ" ),
+        dakutenToMoji( "ケ", "ゲ" ),
+        dakutenToMoji( "コ", "ゴ" ),
+        dakutenToMoji( "サ", "ザ" ),
+        dakutenToMoji( "シ", "ジ" ),
+        dakutenToMoji( "ス", "ズ" ),
+        dakutenToMoji( "セ", "ゼ" ),
+        dakutenToMoji( "ソ", "ゾ" ),
+        dakutenToMoji( "タ", "ダ" ),
+        dakutenToMoji( "チ", "ヂ" ),
+        dakutenToMoji( "ツ", "ヅ" ),
+        dakutenToMoji( "テ", "デ" ),
+        dakutenToMoji( "ト", "ド" ),
+        dakutenToMoji( "ハ", "バ" ),
+        dakutenToMoji( "ヒ", "ビ" ),
+        dakutenToMoji( "フ", "ブ" ),
+        dakutenToMoji( "ヘ", "ベ" ),
+        dakutenToMoji( "ホ", "ボ" ),
+    )
+
+    private val KatakanaHandakutenToMojiMap = arrayOf(
+        dakutenToMoji( "ハ", "パ" ),
+        dakutenToMoji( "ヒ", "ピ" ),
+        dakutenToMoji( "フ", "プ" ),
+        dakutenToMoji( "ヘ", "ペ" ),
+        dakutenToMoji( "ホ", "ポ" ),
+    )
+
     fun clear() {
         produced.clear()
         buffer.clear()
@@ -90,7 +169,47 @@ class RomajiConverter {
         val ch = c.lowercaseChar()
         if (ch !in 'a'..'z') return // ignore non-letters here
         buffer.append(ch)
-        consume()
+        consume()   // Alphabets convert to kana.
+    }
+
+    fun pushHiraganaChar(str: String) {
+        pushKanaCharCore( str, HiraganaDakutenToMojiMap, HiraganaHandakutenToMojiMap )
+    }
+
+    fun pushKatakanaChar(str: String) {
+        pushKanaCharCore( str, KatakanaDakutenToMojiMap, KatakanaHandakutenToMojiMap )
+    }
+
+    fun pushKanaCharCore(
+        str: String,
+        dakuonMap    :Array<dakutenToMoji>,
+        handakuonMap :Array<dakutenToMoji>
+    ) {
+        if ( buffer.isNotEmpty() ) {
+            val keyMap : Array<dakutenToMoji>
+
+            if ( str == "゛" ) {
+                keyMap = dakuonMap.copyOf()
+            }
+            else if ( str == "゜" ) {
+                keyMap = handakuonMap.copyOf()
+            }
+            else {  // No replace
+                buffer.append(str)  // case: no dakuon at second KANA onword
+                return
+            }
+
+            for( rec in keyMap ) {
+                val seion = buffer.get(buffer.lastIndex).toString()
+                if ( seion == rec.seion ) {  // find dakuon-go
+                    buffer.deleteCharAt(buffer.lastIndex)   // delete seion
+                    buffer.append(rec.dakuon)               // replace seion to dakuon
+                    return
+                }
+            }
+        }
+
+        buffer.append(str)  // case: no dakuon at first KANA, umtach dakuon
     }
 
     fun backspace() {

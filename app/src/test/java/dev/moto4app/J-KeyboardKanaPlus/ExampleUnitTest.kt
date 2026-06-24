@@ -1,4 +1,4 @@
-package dev.mikoto2000.oasizjapanesekeyboard
+package dev.moto4app.J_KeyboardKanaPlus
 
 import org.junit.Test
 
