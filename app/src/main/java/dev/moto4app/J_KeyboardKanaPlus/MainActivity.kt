@@ -39,12 +39,17 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, LicenseActivity::class.java))
         }
 
-        findViewById<TextView>(R.id.txtDescription)?.text =
-        "PCのキーボートレイアウトで文字入力が可能なソフトウェアキーボードです。\n" +
-        "以下のモードとレイアウトがあります。\n" +
-        "- 英数字キーボード + 英数字入力。\n" +
-        "- 英数字キーボード + ローマ字入力。\n" +
-        "- ひらがなキーボード + かな入力。\n" +
-        "- カタカナキーボード + カタカナ入力。\n"
+        // Show help
+        val sb = StringBuilder()
+        sb.appendLine(readAssetOrPlaceholder("help/help_jpn01.txt"))
+        findViewById<TextView>(R.id.txtDescription)?.text = sb.toString()
+    }
+
+    private fun readAssetOrPlaceholder(path: String): String {
+        return try {
+            assets.open(path).bufferedReader(Charsets.UTF_8).use { it.readText() }
+        } catch (e: Exception) {
+            "(missing) $path"
+        }
     }
 }

@@ -14,8 +14,10 @@
         android:text="@string/open_licenses"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.539"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.923" />
 
     <TextView
         android:id="@+id/txtTitle"
@@ -45,8 +47,8 @@
 
     <TextView
         android:id="@+id/txtDescription"
-        android:layout_width="382dp"
-        android:layout_height="179dp"
+        android:layout_width="355dp"
+        android:layout_height="469dp"
         android:layout_marginTop="20dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"

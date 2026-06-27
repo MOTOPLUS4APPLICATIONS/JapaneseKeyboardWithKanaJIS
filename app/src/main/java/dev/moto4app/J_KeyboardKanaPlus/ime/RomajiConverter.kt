@@ -222,6 +222,16 @@ class RomajiConverter {
         }
     }
 
+    fun delete() {
+        if (buffer.isNotEmpty()) {
+            if (buffer.lastIndex > 0) buffer.deleteCharAt( buffer.lastIndex-1 )
+            return
+        }
+        if (produced.isNotEmpty()) {
+            if (produced.lastIndex > 0) produced.deleteCharAt( produced.lastIndex-1 )
+        }
+    }
+
     fun getComposing(): String {
         // Show produced kana and any pending raw romaji so consonants are visible while composing.
         return produced.toString() + buffer.toString()
