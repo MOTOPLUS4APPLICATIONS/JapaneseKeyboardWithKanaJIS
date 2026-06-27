@@ -9,8 +9,12 @@
 package dev.moto4app.J_KeyboardKanaPlus.ime
 
 import android.content.Intent
+import android.content.res.Configuration
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.inputmethodservice.InputMethodService
 import android.view.KeyEvent
+import android.util.Log;
 import android.os.SystemClock
 import android.os.Handler
 import android.os.Looper
@@ -19,18 +23,30 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
-import java.util.concurrent.Executors
-import dev.moto4app.J_KeyboardKanaPlus.R
-import dev.moto4app.J_KeyboardKanaPlus.MainActivity
 
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowCompat
 import kotlin.arrayOf
-import android.graphics.Color
-import android.content.res.ColorStateList
+
+import java.util.concurrent.Executors
+
+import dev.moto4app.J_KeyboardKanaPlus.R
+import dev.moto4app.J_KeyboardKanaPlus.MainActivity
+/*
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ NOTICE!!!:
+ To use Logcat and brakepoint, start a debug from menu then re-run the app by the tablet side.
+ To re-run the app, switch other keyboard app at once.
+ Because InputMethodService() will runing on background.
+ So IDE can not connect debuger system on the tablet.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+*/
 
 class JapaneseKeyboardService : InputMethodService() {
+//===============================================================================
+//            S E C T O I N   C O M M O N   V A R I A B L E
+//===============================================================================
     private var shiftOn = false
     private var shiftLock = false
     private var shiftLockAfterSoon = false
@@ -43,19 +59,21 @@ class JapaneseKeyboardService : InputMethodService() {
     private var feedbackEnabled = true
     private val repeatHandler = Handler(Looper.getMainLooper())
     private val longPressHandler = Handler(Looper.getMainLooper())
+    private val adjustDelayHandler = Handler(Looper.getMainLooper())
     private val repeatTasks = mutableMapOf<View, Runnable>()
     private val longPressTasks = mutableMapOf<View, Runnable>()
+    private val adjustDelayTasks = mutableMapOf<View, Runnable>()
     private val letterButtons = mutableListOf<Button>()
     private val symbolButtons = mutableListOf<Pair<Button, String>>()
     private var fnVisible = true
 
     // Kana composing state
-    private val   MODE_ASCII    = 0
-    private val   MODE_ROMA     = 1
-    private val   MODE_HIRAGANA = 2
-    private val   MODE_KATAKANA = 3
-    private val   MODE_MAXNUM  = 4
-    private val   MODE_DSPTXT = arrayOf("英数","ﾛｰﾏ字","かな","カナ"," ")
+    private val MODE_ASCII = 0
+    private val MODE_ROMA = 1
+    private val MODE_HIRAGANA = 2
+    private val MODE_KATAKANA = 3
+    private val MODE_MAXNUM = 4
+    private val MODE_DSPTXT = arrayOf("英数", "ﾛｰﾏ字", "かな", "カナ", " ")
     private var inputMode = MODE_ASCII // default: ASCII mode
 
     private val romaji = RomajiConverter()
@@ -72,7 +90,11 @@ class JapaneseKeyboardService : InputMethodService() {
     private val convExecutor = Executors.newSingleThreadExecutor()
     private var convQuerySeq: Long = 0L
     private var sqliteConverter: SqliteDictionaryConverter? = null
-    private  var longPressStarTime : Long = 0L
+    private var longPressStarTime: Long = 0L
+    private var displayWidth = 0L
+    private var displayHeight = 0L
+    private var isHoriznal: Boolean = false
+    private val mydbg = "[MYDBG2]"
 
     // Segment conversion state
     private data class Segment(
@@ -81,9 +103,13 @@ class JapaneseKeyboardService : InputMethodService() {
         var selectedIndex: Int = 0,
         var loading: Boolean = false
     )
+
     private var segments: MutableList<Segment>? = null
     private var segmentFocus: Int = 0
 
+//===============================================================================
+//          S E C T O I N   C O N S T A N  T  D A T A
+//===============================================================================
     private val shiftSymbolMap: Map<String, String> = mapOf(
         // Number row
         "1" to "!",
@@ -272,16 +298,24 @@ class JapaneseKeyboardService : InputMethodService() {
         keyCodeToMoji( R.id.key_slash,  "・" ),
     )
 
+//===============================================================================
+//                      S E C T O I N   P R O G R A M
+//===============================================================================
+
+	//============ Function Start ============================================
     override fun onCreate() {
+        Log.d(mydbg, "onCreate() in");
+
         super.onCreate()
 
         sqliteConverter = try {
-            // For ime do not overlap navigation　bar.
+            // For ime do not overlap navigationbar.
             val diaWindow = getWindow() ?: return
             val imeWindow = diaWindow?.getWindow() ?: return
             WindowCompat.setDecorFitsSystemWindows(imeWindow, false)
 
             SqliteDictionaryConverter(this).also { converter ->
+				//--------Task Start------------------------------------------
                 convExecutor.execute {
                     try {
                         converter.preload()
@@ -290,14 +324,20 @@ class JapaneseKeyboardService : InputMethodService() {
                     }
                 }
             }
+
         } catch (_: Exception) {
             null
         }
     }
 
+	//============ Function Start ============================================
+    // NOTE: This event called at roll the tablet to 90 degree too.
     override fun onCreateInputView(): View {
+        Log.d(mydbg, "onCreateInputView() in");
+
         val root = layoutInflater.inflate(R.layout.keyboard_jis_qwerty, null)
         rootViewRef = root
+
         // Initialize converter: prefer SQLite dictionary; fallback to TSV; then to simple built-in
         converter = sqliteConverter ?: try {
             DictionaryConverter(this)
@@ -311,18 +351,21 @@ class JapaneseKeyboardService : InputMethodService() {
         // Special keys (repeat enabled)
         // Remark: setRepeatableKey is original API.
         root.findViewById<View>(R.id.key_backspace)?.let { v ->
+            //----------  Event Start ------------------------------------
             setRepeatableKey(v, initialDelay= 350L, repeatInterval = 60L) {
                 deleteText()
                 consumeOneShotModifiers()
             }
         }
         root.findViewById<View>(R.id.key_enter)?.let { v ->
+            //----------  Event Start ------------------------------------
             setRepeatableKey(v) {
                 sendEnter()
                 consumeOneShotModifiers()
             }
         }
         root.findViewById<View>(R.id.key_space)?.let { v ->
+            //----------  Event Start ------------------------------------
             setRepeatableKey(v, initialDelay = 400L, repeatInterval = 150L) {
                 if ( isNeedConvertKanji() ) {
                     //----------------- KANA convert to KANJI start ---------------
@@ -353,20 +396,24 @@ class JapaneseKeyboardService : InputMethodService() {
                     consumeOneShotModifiers()
                 }
             }
+			//----------- Event End ----------------------------------------------
         }
 
         shiftBtn = root.findViewById<Button>(R.id.key_shift)
         // Normal Press
         shiftBtn?.setOnClickListener {
+            //----------  Event Start ------------------------------------
             if ( ! shiftLock ) {
                 changeShiftMode()
                 updateShiftUIALLMode()
                 updateShiftUI()
             }
         }
+
         // Long Press
         // Remark: setOnLongClickListener is timeout 500msec fixed...
         shiftBtn?.let { v ->
+            //----------  Event Start ------------------------------------
             setImeLongPressKey( v ) {
                 changeShiftLockMode()   // Must call first
                 changeShiftMode()       // Must call after
@@ -379,6 +426,7 @@ class JapaneseKeyboardService : InputMethodService() {
 
         shiftBtnRight = root.findViewById<Button>(R.id.key_shift_right)
         shiftBtnRight?.setOnClickListener {
+            //----------  Event Start ------------------------------------
             if ( ! shiftLock ) {
                 changeShiftMode()
                 updateShiftUIALLMode()
@@ -387,6 +435,7 @@ class JapaneseKeyboardService : InputMethodService() {
         }
         // Long Press
         shiftBtnRight?.let { v ->
+            //----------  Event Start ------------------------------------
             setImeLongPressKey( v ) {
                 changeShiftLockMode()   // Must call first
                 changeShiftMode()       // Must call after
@@ -397,6 +446,7 @@ class JapaneseKeyboardService : InputMethodService() {
 
         ctrlBtn = root.findViewById<Button>(R.id.key_ctrl)
         ctrlBtn?.setOnClickListener {
+            //----------  Event Start ------------------------------------
             if (inputMode == MODE_ASCII) {
                 ctrlOn = !ctrlOn
                 updateCtrlUI()
@@ -407,6 +457,7 @@ class JapaneseKeyboardService : InputMethodService() {
         // Language toggle (A <-> あ)
         langBtn = root.findViewById<Button>(R.id.key_lang_toggle)
         langBtn?.setOnClickListener {
+            //----------  Event Start ------------------------------------
             toggleKanaMode()
         }
         updateLangToggleUI()
@@ -414,40 +465,57 @@ class JapaneseKeyboardService : InputMethodService() {
         // Arrow keys (repeat enabled)
         // Remark: setRepeatableKey is original API.
         root.findViewById<View>(R.id.key_arrow_left)?.let { v ->
+            //----------  Event Start ------------------------------------
             setRepeatableKey(v) {
                 if ( isNeedConvertKanji() && isInConversion() && segments != null ) {
                     moveSegmentFocus(-1)
-                } else {
+                } 
+				else {
                     flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_LEFT); consumeOneShotModifiers()
                 }
             }
         }
         root.findViewById<View>(R.id.key_arrow_right)?.let { v ->
+            //----------  Event Start ------------------------------------
             setRepeatableKey(v) {
                 if ( isNeedConvertKanji() && isInConversion() && segments != null ) {
                     moveSegmentFocus(1)
-                } else {
+                }
+				else {
                     flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_RIGHT); consumeOneShotModifiers()
                 }
             }
         }
         root.findViewById<View>(R.id.key_arrow_up)?.let { v ->
-            setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_UP); consumeOneShotModifiers() }
+            //----------  Event Start ------------------------------------
+            setRepeatableKey(v) { 
+				flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_UP); consumeOneShotModifiers() 
+			}
         }
         root.findViewById<View>(R.id.key_arrow_down)?.let { v ->
-            setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_DOWN); consumeOneShotModifiers() }
+            //----------  Event Start ------------------------------------
+            setRepeatableKey(v) {
+				 flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_DOWN); consumeOneShotModifiers() 
+			}
         }
 
         // ESC / TAB (repeat enabled)
         root.findViewById<View>(R.id.key_esc)?.let { v ->
-            setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendSimpleKey(KeyEvent.KEYCODE_ESCAPE); consumeOneShotModifiers() }
+            //----------  Event Start ------------------------------------
+            setRepeatableKey(v) { 
+				flushComposingOrConversionIfNeeded(); sendSimpleKey(KeyEvent.KEYCODE_ESCAPE); consumeOneShotModifiers() 
+			}
         }
         root.findViewById<View>(R.id.key_tab)?.let { v ->
-            setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendSimpleKey(KeyEvent.KEYCODE_TAB); consumeOneShotModifiers() }
+            //----------  Event Start ------------------------------------
+            setRepeatableKey(v) {
+				 flushComposingOrConversionIfNeeded(); sendSimpleKey(KeyEvent.KEYCODE_TAB); consumeOneShotModifiers() 
+			}
         }
 
         // help view
         root.findViewById<Button>(R.id.key_help)?.let { btn ->
+            //----------  Event Start ------------------------------------
             btn.setOnClickListener {
                 var intentHelp : Intent = Intent( getApplication(), MainActivity::class.java)
                 intentHelp.addFlags( Intent.FLAG_ACTIVITY_NEW_TASK );
@@ -470,9 +538,13 @@ class JapaneseKeyboardService : InputMethodService() {
             R.id.key_f11 to KeyEvent.KEYCODE_F11,
             R.id.key_f12 to KeyEvent.KEYCODE_F12,
         )
+
         for ((rid, code) in fnMap) {
             root.findViewById<View>(rid)?.let { v ->
-                setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendSimpleKey(code); consumeOneShotModifiers() }
+            	//----------  Event Start ------------------------------------
+                setRepeatableKey(v) {
+					 flushComposingOrConversionIfNeeded(); sendSimpleKey(code); consumeOneShotModifiers() 
+				}
             }
         }
 
@@ -480,6 +552,7 @@ class JapaneseKeyboardService : InputMethodService() {
         val fnRow = root.findViewById<View>(R.id.row_fn)
         fnRow?.visibility = if (fnVisible) View.VISIBLE else View.GONE
         root.findViewById<Button>(R.id.key_fn_toggle)?.let { btn ->
+           	//----------  Event Start ------------------------------------
             btn.setOnClickListener {
                 fnVisible = !fnVisible
                 fnRow?.visibility = if (fnVisible) View.VISIBLE else View.GONE
@@ -490,6 +563,7 @@ class JapaneseKeyboardService : InputMethodService() {
 
         // Feedback toggle (left of space)
         root.findViewById<Button>(R.id.key_feedback_toggle)?.let { btn ->
+           	//----------  Event Start ------------------------------------
             btn.setOnClickListener {
                 feedbackEnabled = !feedbackEnabled
                 updateFeedbackToggleUI(btn)
@@ -499,10 +573,10 @@ class JapaneseKeyboardService : InputMethodService() {
         }
 
         // Candidate views
-        candidatesRoot = root.findViewById(R.id.candidates_root)
-        segmentList = root.findViewById(R.id.segment_list)
-        candidateContainer = root.findViewById(R.id.candidate_container)
-        candidateList = root.findViewById(R.id.candidate_list)
+        candidatesRoot 		= root.findViewById(R.id.candidates_root)
+        segmentList 		= root.findViewById(R.id.segment_list)
+        candidateContainer	= root.findViewById(R.id.candidate_container)
+        candidateList 		= root.findViewById(R.id.candidate_list)
 
         // Segment boundary adjust buttons
         root.findViewById<Button>(R.id.segment_shrink_right)?.setOnClickListener {
@@ -512,12 +586,36 @@ class JapaneseKeyboardService : InputMethodService() {
             adjustBoundaryRight(1)
         }
 
+        adjustStartInputView()  // Must call this fouction before event of onApplyWindowInsetsListene.
+
+        // NOTE: This event called at roll the tablet to 90 degree too.
+        // NOTE: This event called 2 tomes when app first creat.
         // For IME do not overlap navigation　bar.
-        // NOTE: IME sometimes overlap navigation bar.
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, windowInsets ->
-            val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
-            view.setPadding(insets.left, insets.top, insets.right, insets.bottom)
+           	//----------  Event Start ------------------------------------
+            Log.d(mydbg, "onApplyWindowInsetsListener() in");
+
+            // Remark: IME sometimes overlap navigation bar.
+            //         It is rate time untill appear the systemBars.
+            //         Wait for appeared the systemBars.
+            val task = object : Runnable {
+           		//----------  Task Start ------------------------------------
+                override fun run() {
+                    adjustDelayTasks.remove(view)?.let { adjustDelayHandler.removeCallbacks(it) }
+
+                    val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
+                    if ( insets != null ) {
+                        view.setPadding(insets.left, insets.top, insets.right, insets.bottom)
+                        Log.d(mydbg, "offset view by systembar.");
+                    }
+                    Log.d(mydbg, "adjustDelayTasks end.");
+                }
+           		//----------  Task End ------------------------------------
+            }
+            adjustDelayTasks[view] = task
+            adjustDelayHandler.postDelayed(task, 200L)
             WindowInsetsCompat.CONSUMED
+           	//----------  Event END ------------------------------------
         }
 
         // Apply initial backgrounds to all keys
@@ -526,6 +624,68 @@ class JapaneseKeyboardService : InputMethodService() {
         return root
     }
 
+	//============ Function Start ============================================
+    // Adjust view height as rotation of window.
+    fun adjustStartInputView() {
+
+        Log.d(mydbg, "onStartInputView() in");
+        // Display orientation (reseave)
+        // NOTE: Judge an orientation of display by height/width.
+        val orientation = resources.configuration.orientation
+        isHoriznal = (orientation == Configuration.ORIENTATION_LANDSCAPE)
+        Log.d(mydbg, "isHoriznal:" + isHoriznal)
+
+        // Display height / width
+        // NOTE : Roll display 90 degree when exchange width and height.
+        val metrics = resources.displayMetrics
+        val displayWidth = metrics.widthPixels
+        val displayHeight = metrics.heightPixels
+        Log.d(mydbg, "displayWidth:" + displayWidth)
+        Log.d(mydbg, "displayHeight:" + displayHeight)
+
+        val density = resources.displayMetrics.density
+        // ToDo: Must be changeable the heights from the setting veiw (added in the future).
+        val newHeightPx = if (isHoriznal) (30 * density).toInt() else (48 * density).toInt()
+
+        var params = rootViewRef?.layoutParams
+        var kbFrame = rootViewRef?.findViewById<LinearLayout>(R.id.frame_keyboard)
+        if (kbFrame == null) {
+            Log.d(mydbg, "Unexpect error 1"); // ToDo:  Add error message for user.
+            return
+        }
+
+        // Change height of all buttons.
+        // - Height of buttons is set match_parent. So the height is adjusted automatcaly by height of row frame.
+        // - Height of row frame is set fixed value.
+        // - Height of key board frame is adjusted automatcaly b height of row frame.
+        for (i in 0 until kbFrame.childCount) {
+            var rowFrame = kbFrame.getChildAt(i)
+            if ( !( rowFrame is LinearLayout ) ) continue
+
+            // NOTE: Targets linearLayouts is set id-name to "row_".
+            val idName = resources.getResourceName(rowFrame.id)
+            if ( idName == null ) continue
+
+            if ( idName.contains("/row_") )  {
+                val params = rowFrame.layoutParams
+                params?.let {
+                    it.height = newHeightPx
+                    rowFrame.layoutParams = it
+                }
+            }
+        }
+
+        // Change height to KANJI convert candidates frames.
+        for (caFrame in arrayOf(segmentList, candidateContainer, candidateList) ) {
+            val params = caFrame?.layoutParams
+            params?.let {
+                it.height = newHeightPx + 4 /*panding*/
+                caFrame.layoutParams = it
+            }
+        }
+    }
+
+	//============ Function Start ============================================
     private fun changeShiftMode() {
         if ( isNeedShiftKey() ) {
             // Do not check condidion of shitfLock hear.
@@ -534,12 +694,14 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun changeShiftLockMode() {
         if ( isNeedShiftKey()) {
             shiftLock = !shiftLock
         }
     }
 
+	//============ Function Start ============================================
     private fun updateShiftUIALLMode() {
         if (inputMode == MODE_ASCII) {
             updateShiftEnglishKeyboard()
@@ -552,6 +714,7 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     // Is it mode need to convert to KANJI.
     private fun isNeedConvertKanji() : Boolean  {
         if ( inputMode == MODE_ROMA     ) return true
@@ -560,6 +723,7 @@ class JapaneseKeyboardService : InputMethodService() {
         return false
     }
 
+	//============ Function Start ============================================
     private fun isNeedShiftKey() : Boolean  {
         if ( inputMode == MODE_ASCII    ) return true
         if ( inputMode == MODE_ROMA     ) return true
@@ -568,6 +732,7 @@ class JapaneseKeyboardService : InputMethodService() {
         return false
     }
 
+	//============ Function Start ============================================
     private fun wireKeysRecursively(view: View) {
         if (view is ViewGroup) {
             for (i in 0 until view.childCount) {
@@ -641,6 +806,7 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun updateShiftEnglishKeyboard() {
         // Update labels for letter buttons
         for (btn in letterButtons) {
@@ -648,6 +814,7 @@ class JapaneseKeyboardService : InputMethodService() {
             val base = tag.removePrefix("letter:")
             btn.text = if (shiftOn) base.uppercase() else base.lowercase()
         }
+
         // Update labels for symbol buttons
         for ((btn, base) in symbolButtons) {
             btn.text = if (shiftOn) shiftSymbolMap[base] ?: base else base
@@ -655,16 +822,18 @@ class JapaneseKeyboardService : InputMethodService() {
 
         // Reset rotationY to 0.
         // RotationY has set to 180 because display backslash in japanease mode.
+        val shiftBtn = rootViewRef?.findViewById<Button>(R.id.key_backslash)
         if (shiftOn) {
-            rootViewRef?.findViewById<Button>(R.id.key_backslash)?.text = "_"
-            rootViewRef?.findViewById<Button>(R.id.key_backslash)?.rotationY = 0.0f
+            shiftBtn?.text = "_"
+            shiftBtn?.rotationY = 0.0f
         }
         else {
-            rootViewRef?.findViewById<Button>(R.id.key_backslash)?.text = "/"
-            rootViewRef?.findViewById<Button>(R.id.key_backslash)?.rotationY = 180.0f
+            shiftBtn?.text = "/"
+            shiftBtn?.rotationY = 180.0f
         }
     }
 
+	//============ Function Start ============================================
     private fun changeOnColorButton(btn : Button, onState :Boolean, lockState : Boolean = false) {
         var onColor     = Color.rgb(10,10,10) /*Deep gray*/
         var lockColor   = Color.rgb(255,0,0) /*red*/
@@ -693,6 +862,7 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun updateShiftUI() {
         val active = shiftOn
         shiftBtn?.let { btn ->
@@ -705,6 +875,7 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun updateCtrlUI() {
         ctrlBtn?.let { btn ->
             changeOnColorButton(btn, ctrlOn)
@@ -720,6 +891,7 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun sendKeyWithMeta(keyCode: Int, meta: Int) {
         val now = SystemClock.uptimeMillis()
         val ic = currentInputConnection ?: return
@@ -727,6 +899,7 @@ class JapaneseKeyboardService : InputMethodService() {
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0, meta))
     }
 
+	//============ Function Start ============================================
     private fun sendDpad(keyCode: Int) {
         val now = SystemClock.uptimeMillis()
         val ic = currentInputConnection ?: return
@@ -734,6 +907,7 @@ class JapaneseKeyboardService : InputMethodService() {
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0))
     }
 
+	//============ Function Start ============================================
     private fun sendSimpleKey(keyCode: Int) {
         val now = SystemClock.uptimeMillis()
         val ic = currentInputConnection ?: return
@@ -741,18 +915,21 @@ class JapaneseKeyboardService : InputMethodService() {
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0))
     }
 
+	//============ Function Start ============================================
     // This founction set to whether any button filled backcolor.
     private fun updateFeedbackToggleUI(btn: Button) {
         changeOnColorButton(btn, feedbackEnabled)
         btn.isSelected = feedbackEnabled
     }
 
+	//============ Function Start ============================================
     // This founction set to whether any button filled backcolor.
     private fun applyKeyBackgrounds() {
         val root = rootViewRef as? ViewGroup ?: return
         applyKeyBackgroundsRec(root)
     }
 
+	//============ Function Start ============================================
     // This founction set to whether any button filled backcolor.
     private fun applyKeyBackgroundsRec(view: View) {
         if (view is ViewGroup) {
@@ -767,11 +944,13 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun updateFnToggleUI(btn: Button) {
         changeOnColorButton(btn, fnVisible)
         btn.isSelected = fnVisible
     }
 
+	//============ Function Start ============================================
     private fun consumeOneShotModifiers() {
         var changed = false
         if (shiftOn == true && shiftLock == false ) {
@@ -786,6 +965,7 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun setRepeatableKey(
         view: View,
         initialDelay: Long = 400L,
@@ -794,21 +974,25 @@ class JapaneseKeyboardService : InputMethodService() {
     ) {
         view.setOnTouchListener { v, ev ->
             when (ev.actionMasked) {
+           		//----------  Event Start ------------------------------------
                 MotionEvent.ACTION_DOWN -> {
                     v.isPressed = true
                     // Fire immediately
                     action()
                     // Schedule repeats
+         			//----------  Task Start ----------------------------------
                     val task = object : Runnable {
                         override fun run() {
                             action()
                             repeatHandler.postDelayed(this, repeatInterval)
                         }
                     }
+         			//----------  Task End ----------------------------------
                     repeatTasks[v] = task
                     repeatHandler.postDelayed(task, initialDelay)
                     true
                 }
+           		//----------  Event Start ------------------------------------
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_OUTSIDE -> {
                     v.isPressed = false
                     repeatTasks.remove(v)?.let { repeatHandler.removeCallbacks(it) }
@@ -819,6 +1003,7 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun setImeLongPressKey(
         view: View,
         waittime: Long = 1500L,
@@ -827,17 +1012,21 @@ class JapaneseKeyboardService : InputMethodService() {
         view.setOnTouchListener { v, ev ->
             /* NOTE: There are 6 warning error in this function. */
                 when (ev.actionMasked) {
+           			//----------  Event Start ------------------------------------
                     MotionEvent.ACTION_DOWN -> {
                         // Handler at passed waittime
+           				//----------  Task Start -------------------------------
                         val task = object : Runnable {
                             override fun run() {
                                 action()
                             }
                         }
+           				//----------  Task End -------------------------------
                         longPressTasks[v] = task    // keep instance for stop task
                         longPressHandler.postDelayed(task, waittime)    // Start waiting
                         false // if set to true, do not occure click enent.
                     }
+           			//----------  Event Start ------------------------------------
                     MotionEvent.ACTION_UP -> {
                         longPressTasks.remove(v)?.let { longPressHandler.removeCallbacks(it) }
                         false // if set to true, do not occure click enent.
@@ -847,8 +1036,8 @@ class JapaneseKeyboardService : InputMethodService() {
             }
     }
 
+	//============ Function Start ============================================
     // One-shot and lock behavior removed; simple toggle with click.
-
     private fun letterToKeyCode(letter: String): Int? {
         return when (letter.lowercase()) {
             "a" -> KeyEvent.KEYCODE_A
@@ -881,10 +1070,12 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun commitText(text: String) {
         currentInputConnection?.commitText(text, 1)
     }
 
+	//============ Function Start ============================================
     private fun deleteText() {
         if ( isNeedConvertKanji() ) {
             if (isInConversion()) {
@@ -900,6 +1091,7 @@ class JapaneseKeyboardService : InputMethodService() {
         currentInputConnection?.deleteSurroundingText(1, 0)
     }
 
+	//============ Function Start ============================================
     private fun sendEnter() {
         val ic = currentInputConnection ?: return
         if ( isNeedConvertKanji() ) {
@@ -918,6 +1110,7 @@ class JapaneseKeyboardService : InputMethodService() {
         ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
     }
 
+	//============ Function Start ============================================
     private fun changeToHiraganaKeyboard() {
         for ( rec in engToHiraganaMap) {
             val btn = rootViewRef?.findViewById<Button>(rec.keyCode)
@@ -935,6 +1128,7 @@ class JapaneseKeyboardService : InputMethodService() {
         rootViewRef?.findViewById<Button>(R.id.key_backslash)?.rotationY = 0.0f
     }
 
+	//============ Function Start ============================================
     private fun updateShiftHiraganaKeyboard() {
         val keyMap : Array<keyCodeToMoji>
 
@@ -953,6 +1147,7 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun changeToKatakanaKeyboard() {
         for ( rec in engToKatakanaMap) {
             val btn = rootViewRef?.findViewById<Button>(rec.keyCode)
@@ -970,6 +1165,7 @@ class JapaneseKeyboardService : InputMethodService() {
         rootViewRef?.findViewById<Button>(R.id.key_backslash)?.rotationY = 0.0f
     }
 
+	//============ Function Start ============================================
     private fun updateShiftKatakanaKeyboard() {
         val keyMap : Array<keyCodeToMoji>
 
@@ -988,12 +1184,14 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun changeToEngilshKeyboard() {
         rootViewRef?.findViewById<Button>(R.id.key_space)?.text = "space"
 
         updateShiftEnglishKeyboard()
     }
 
+	//============ Function Start ============================================
     private fun updateLangToggleUI() {
         langBtn?.let { btn ->
             btn.text = MODE_DSPTXT[inputMode]
@@ -1045,6 +1243,7 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun toggleKanaMode() {
         //  Input modes will change cyclic as blow.
         //  ASCII -> ROMA -> HIRAGANA -> KATAKANA -> ASCII
@@ -1055,6 +1254,7 @@ class JapaneseKeyboardService : InputMethodService() {
         updateLangToggleUI()
     }
 
+	//============ Function Start ============================================
     private fun updateComposingText() {
         val ic = currentInputConnection ?: return
         val text = romaji.getComposing()
@@ -1065,12 +1265,16 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
+    // This event will called at any operate the KANJI list window.
     private fun updateComposingFromSegments() {
         val ic = currentInputConnection ?: return
         val out = joinedOutputFromSegments()
         ic.setComposingText(out, 1)
+        Log.d(mydbg, "convert:" + out)
     }
 
+	//============ Function Start ============================================
     private fun handleRomaKanaLetter(base: String) {
         if (base.isEmpty()) return
         if (isInConversion()) {
@@ -1082,6 +1286,7 @@ class JapaneseKeyboardService : InputMethodService() {
         updateComposingText()
     }
 
+	//============ Function Start ============================================
     private fun handleHiraganaLetter(base: Button) {
         if (isInConversion()) {
             // typing while selecting: cancel conversion and restore reading to composing
@@ -1092,6 +1297,7 @@ class JapaneseKeyboardService : InputMethodService() {
         updateComposingText()
     }
 
+	//============ Function Start ============================================
     private fun handleKatakanaLetter(base: Button) {
         if (isInConversion()) {
             // typing while selecting: cancel conversion and restore reading to composing
@@ -1102,6 +1308,7 @@ class JapaneseKeyboardService : InputMethodService() {
         updateComposingText()
     }
 
+	//============ Function Start ============================================
     private fun flushComposingIfNeeded() {
         if (inputMode != MODE_ASCII) return
         if (romaji.hasComposing()) {
@@ -1112,6 +1319,7 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun flushComposingOrConversionIfNeeded() {
         if (inputMode != MODE_ASCII) return
         if (isInConversion()) {
@@ -1121,8 +1329,10 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun isInConversion(): Boolean = conversionReading != null
 
+	//============ Function Start ============================================
     private fun startConversion() {
         val ic = currentInputConnection ?: return
         val reading = romaji.flush()
@@ -1137,15 +1347,18 @@ class JapaneseKeyboardService : InputMethodService() {
         loadSegmentCandidates(segmentFocus)
     }
 
+	//============ Function Start ============================================
     private fun buildSegments(reading: String): MutableList<Segment> {
         val maxLen = 6
         val segs = mutableListOf<Segment>()
         var i = 0
+
         while (i < reading.length) {
             var taken = 1
             var bestLen = 1
             var bestScore = 0
             val maxTry = kotlin.math.min(maxLen, reading.length - i)
+
             for (l in maxTry downTo 1) {
                 val sub = reading.substring(i, i + l)
                 val qs = try { converter.query(sub) } catch (_: Throwable) { emptyList() }
@@ -1166,36 +1379,50 @@ class JapaneseKeyboardService : InputMethodService() {
         return segs
     }
 
+	//============ Function Start ============================================
     private fun joinedOutputFromSegments(): String {
         val segs = segments ?: return conversionReading ?: ""
+        Log.d(mydbg, "all-seg:" + segments)
         val sb = StringBuilder()
+
         for (seg in segs) {
             val out = currentSegmentOutput(seg)
+            Log.d(mydbg, "part-seg:" + out)
             sb.append(out)
         }
         return sb.toString()
     }
 
+	//============ Function Start ============================================
     private fun currentSegmentOutput(seg: Segment): String {
         return if (seg.candidates.isNotEmpty()) {
             seg.candidates.getOrNull(seg.selectedIndex) ?: seg.reading
         } else seg.reading
     }
 
+	//============ Function Start ============================================
     private fun moveSegmentFocus(delta: Int) {
         val segs = segments ?: return
+
         if (segs.isEmpty()) return
+
         val newIdx = (segmentFocus + delta).coerceIn(0, segs.lastIndex)
+
         if (newIdx == segmentFocus) return
+
         segmentFocus = newIdx
         updateSegmentsUI()
         loadSegmentCandidates(segmentFocus)
     }
 
+	//============ Function Start ============================================
     private fun loadSegmentCandidates(index: Int) {
         val segs = segments ?: return
         val seg = segs.getOrNull(index) ?: return
         val reading = seg.reading
+
+        Log.d(mydbg, "reading:" + reading)
+
         seg.loading = true
         updateCandidatesUI()
         val token = convQuerySeq
@@ -1204,6 +1431,9 @@ class JapaneseKeyboardService : InputMethodService() {
             repeatHandler.post {
                 if (isInConversion() && convQuerySeq == token && segments === segs && segs.getOrNull(index)?.reading == reading) {
                     seg.candidates = res.toMutableList()
+
+                    Log.d(mydbg, "candidates:" + res)
+
                     seg.loading = false
                     // Initialize selection to first candidate if available
                     if (seg.selectedIndex !in seg.candidates.indices) seg.selectedIndex = 0
@@ -1215,13 +1445,19 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun adjustBoundaryRight(delta: Int) {
         val segs = segments ?: return
+
         if (segs.isEmpty()) return
+
         val idx = segmentFocus
+
         if (idx < 0 || idx >= segs.size - 1) return // need next segment to adjust right boundary
+
         val cur = segs[idx]
         val next = segs[idx + 1]
+
         if (delta > 0) {
             // expand current to right: take 1 char from next head
             if (next.reading.length <= 1) {
@@ -1229,12 +1465,14 @@ class JapaneseKeyboardService : InputMethodService() {
                 cur.reading += next.reading
                 // Remove next segment
                 segs.removeAt(idx + 1)
-            } else {
+            }
+			else {
                 val ch = next.reading.first()
                 cur.reading += ch
                 next.reading = next.reading.substring(1)
             }
-        } else if (delta < 0) {
+        }
+		else if (delta < 0) {
             // shrink current from right: give 1 char to next head
             if (cur.reading.length <= 1) return
             val ch = cur.reading.last()
@@ -1249,6 +1487,7 @@ class JapaneseKeyboardService : InputMethodService() {
             val n2 = segs[idx + 1]
             n2.candidates.clear(); n2.selectedIndex = 0; n2.loading = true
         }
+
         // Immediately reflect UI with placeholder (readings) before async results arrive
         updateSegmentsUI()
         updateComposingFromSegments()
@@ -1257,8 +1496,10 @@ class JapaneseKeyboardService : InputMethodService() {
         if (idx + 1 < segs.size) loadSegmentCandidates(idx + 1)
     }
 
+	//============ Function Start ============================================
     private fun commitSelectedCandidate() {
         val ic = currentInputConnection ?: return
+
         if (isInConversion()) {
             val segs = segments
             if (segs != null && segs.isNotEmpty()) {
@@ -1277,6 +1518,7 @@ class JapaneseKeyboardService : InputMethodService() {
                 } catch (_: Throwable) {}
                 ic.commitText(text, 1)
             }
+
             hideCandidatesUI()
             conversionReading = null
             convQuerySeq++
@@ -1285,10 +1527,13 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun cancelConversionRestore() {
         if (!isInConversion()) return
+
         val ic = currentInputConnection ?: return
         val reading = conversionReading!!
+
         hideCandidatesUI()
         conversionReading = null
         convQuerySeq++
@@ -1297,26 +1542,33 @@ class JapaneseKeyboardService : InputMethodService() {
         ic.setComposingText(reading, 1)
     }
 
+	//============ Function Start ============================================
     private fun showCandidatesUI() {
         candidatesRoot?.visibility = View.VISIBLE
         updateSegmentsUI()
         updateCandidatesUI()
     }
 
+	//============ Function Start ============================================
     private fun hideCandidatesUI() {
         candidatesRoot?.visibility = View.GONE
         candidateList?.removeAllViews()
         segmentList?.removeAllViews()
     }
 
+	//============ Function Start ============================================
     private fun updateCandidatesUI() {
         val list = candidateList ?: return
+
         list.removeAllViews()
+
         val segs = segments
+
         if (isInConversion() && segs != null) {
             if (segs.isEmpty()) return
             val focus = segs.getOrNull(segmentFocus) ?: return
             val cands = if (focus.candidates.isNotEmpty()) focus.candidates else emptyList()
+
             if (cands.isEmpty()) {
                 // show loading or reading placeholder
                 val btn = Button(this)
@@ -1327,7 +1579,9 @@ class JapaneseKeyboardService : InputMethodService() {
                 lp.marginEnd = 6
                 btn.layoutParams = lp
                 btn.isEnabled = false
-                btn.text = if (focus.loading) "…" else focus.reading
+                btn.isEnabled = false
+                btn.setPadding(0,0,0,0)
+                btn.text = if (focus.loading) "..." else focus.reading  // No use tree point char of UTF-8(0xE280A6).
                 list.addView(btn)
                 return
             }
@@ -1339,7 +1593,8 @@ class JapaneseKeyboardService : InputMethodService() {
                 )
                 lp.marginEnd = 6
                 btn.layoutParams = lp
-                btn.text = if (index == focus.selectedIndex) "•$cand" else cand
+                btn.setPadding(0,0,0,0)
+                btn.text = if (index == focus.selectedIndex) "・$cand" else cand // No use bullet of UTF-8(0xE280A2)
                 btn.setOnClickListener {
                     focus.selectedIndex = index
                     updateSegmentsUI()
@@ -1353,7 +1608,8 @@ class JapaneseKeyboardService : InputMethodService() {
                 }
                 list.addView(btn)
             }
-        } else {
+        }
+		else {
             candidates.forEachIndexed { index, cand ->
                 val btn = Button(this)
                 val lp = LinearLayout.LayoutParams(
@@ -1362,7 +1618,8 @@ class JapaneseKeyboardService : InputMethodService() {
                 )
                 lp.marginEnd = 6
                 btn.layoutParams = lp
-                btn.text = if (index == selectedCandidateIndex) "•$cand" else cand
+                btn.setPadding(0,0,0,0)
+                btn.text = if (index == selectedCandidateIndex) "・$cand" else cand  // No use bullet of UTF-8(0xE280A2)
                 btn.setOnClickListener {
                     selectedCandidateIndex = index
                     commitSelectedCandidate()
@@ -1372,10 +1629,14 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+	//============ Function Start ============================================
     private fun updateSegmentsUI() {
         val list = segmentList ?: return
+
         list.removeAllViews()
+
         val segs = segments ?: return
+
         segs.forEachIndexed { idx, seg ->
             val label = currentSegmentOutput(seg)
             val btn = Button(this)
@@ -1385,6 +1646,7 @@ class JapaneseKeyboardService : InputMethodService() {
             )
             lp.marginEnd = 6
             btn.layoutParams = lp
+            btn.setPadding(0,0,0,0)
             btn.text = if (idx == segmentFocus) "[$label]" else label
             btn.setOnClickListener {
                 segmentFocus = idx
@@ -1395,17 +1657,19 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
-    private fun updateCandidateSelectionUI() {
+	//============ Function Start ============================================
+   private fun updateCandidateSelectionUI() {
         val list = candidateList ?: return
         for (i in 0 until list.childCount) {
             val v = list.getChildAt(i)
             if (v is Button) {
                 val text = candidates.getOrNull(i) ?: ""
-                v.text = if (i == selectedCandidateIndex) "•$text" else text
+                v.text = if (i == selectedCandidateIndex) "・$text" else text	  // No use bullet of UTF-8(0xE280A2)
             }
         }
     }
 
+	//============ Function Start ============================================
     override fun onDestroy() {
         try {
             sqliteConverter?.close()

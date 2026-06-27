@@ -11,6 +11,7 @@ package dev.moto4app.J_KeyboardKanaPlus
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import android.util.Log;
 import android.view.View
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -20,7 +21,11 @@ import android.content.Intent
 import dev.moto4app.J_KeyboardKanaPlus.ui.LicenseActivity
 
 class MainActivity : AppCompatActivity() {
+    var mydbg = "[MYDBG1]"
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        Log.d(mydbg, "onCreate() in");
+
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_main)
