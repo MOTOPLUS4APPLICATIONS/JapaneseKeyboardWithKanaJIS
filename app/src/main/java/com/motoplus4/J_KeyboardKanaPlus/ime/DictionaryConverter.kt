@@ -1,4 +1,4 @@
-package dev.moto4app.J_KeyboardKanaPlus.ime
+package com.motoplus4.J_KeyboardKanaPlus.ime
 
 import android.content.Context
 import java.io.BufferedReader

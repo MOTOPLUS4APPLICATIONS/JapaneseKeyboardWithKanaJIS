@@ -6,12 +6,13 @@
       Licensed Material of Moto+4 Applications LLC.
  */
 
-package dev.moto4app.J_KeyboardKanaPlus.ime
+package com.motoplus4.J_KeyboardKanaPlus.ime
 
 import android.content.Intent
 import android.content.res.Configuration
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.Rect
 import android.inputmethodservice.InputMethodService
 import android.view.KeyEvent
 import android.util.Log;
@@ -22,6 +23,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.ImageButton
 import android.widget.LinearLayout
 
 import androidx.core.view.ViewCompat
@@ -31,8 +33,10 @@ import kotlin.arrayOf
 
 import java.util.concurrent.Executors
 
-import dev.moto4app.J_KeyboardKanaPlus.R
-import dev.moto4app.J_KeyboardKanaPlus.MainActivity
+import com.motoplus4.J_KeyboardKanaPlus.R
+import com.motoplus4.J_KeyboardKanaPlus.MainActivity
+import kotlin.text.contains
+
 /*
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  NOTICE!!!:
@@ -54,12 +58,14 @@ class JapaneseKeyboardService : InputMethodService() {
 
     private val TIME_DELAY_SHOW_SYSTEMBAR	= 200L
     private val TIME_LONGPRESS_KEY 			= 1500L
-    private val TIME_REPEAT_START_DELAY 	= 400L
+    private val TIME_REPEAT_START_DELAY 	= 800L     // Orignal 400L
     private val TIME_REPEAT_START_DELAY_BS 	= 350L
-    private val TIME_REPEAT_INTERVAL	 	= 70L
+    private val TIME_REPEAT_INTERVAL	 	= 120L      // Orignal 70L
     private val TIME_REPEAT_INTERVAL_SPACE 	= 150L
     private val TIME_REPEAT_INTERVAL_BS		= 60L
+    private val TIME_PRESS_ENTER		= 80L
 
+    private val COLOR_MASK_BUTTON_AT_PRESS	= 0.5f
     private val COLOR_KEYBOARD_BACKGROUNDY	= Color.rgb(0x21,0x96,0xF3)	// Light Blue
     private val COLOR_SHIFT_ON				= Color.rgb(10,10,10) /*Deep gray*/
     private val COLOR_SHIFT_LOCK			= Color.rgb(255,0,0) /*red*/
@@ -72,6 +78,11 @@ class JapaneseKeyboardService : InputMethodService() {
     private val ENABLE_CANCEL_AT_ESCAPE_NOT_SEND_EVENT = true
     /* When cursor position is edges of life and reight, hide the IME. */
     private val ENABLE_HIDE_IME_AT_CURSOR_EDGE = false
+    /* Repeat enter-key . */
+    private val ENABLE_REPEAT_ENTER = false
+    private val ENABLE_KEY_VIBRATION = true
+    /* When a mode chanhed, flash strongs of iputting. */
+    private val ENABLE_FLUSH_AT_MODE_CHANGE = true
 
 //===============================================================================
 //            S E C T O I N   C O M M O N   V A R I A B L E
@@ -95,6 +106,7 @@ class JapaneseKeyboardService : InputMethodService() {
     private val letterButtons = mutableListOf<Button>()
     private val symbolButtons = mutableListOf<Pair<Button, String>>()
     private var fnVisible = true
+    private lateinit /*no init at alloc */ var lastPressKey: Button
 
     // Kana composing state
     private val MODE_ASCII = 0
@@ -102,7 +114,6 @@ class JapaneseKeyboardService : InputMethodService() {
     private val MODE_HIRAGANA = 2
     private val MODE_KATAKANA = 3
     private val MODE_MAXNUM = 4
-    private val MODE_DSPTXT = arrayOf("英数", "ﾛｰﾏ字", "かな", "カナ", " ")
     private var inputMode = MODE_ASCII // default: ASCII mode
 
     private val romaji = RomajiConverter()
@@ -123,7 +134,6 @@ class JapaneseKeyboardService : InputMethodService() {
     private var displayWidth = 0L
     private var displayHeight = 0L
     private var isHoriznal: Boolean = false
-    private val mydbg = "[MYDBG2]"
 
     // Segment conversion state
     private data class Segment(
@@ -139,6 +149,9 @@ class JapaneseKeyboardService : InputMethodService() {
 //===============================================================================
 //          S E C T O I N   C O N S T A N  T  D A T A
 //===============================================================================
+    private val MODE_DSPTXT = arrayOf("英数", "ﾛｰﾏ字", "かな", "カナ", " ")
+    private val mydbg = "[MYDBG2]"
+
     private val shiftSymbolMap: Map<String, String> = mapOf(
         // Number row
         "1" to "!",
@@ -150,7 +163,7 @@ class JapaneseKeyboardService : InputMethodService() {
         "7" to "'",
         "8" to "(",
         "9" to ")",
-        "0" to ")",
+        "0" to "000",   /* It is spacal key, non jis layout. */
         "-" to "=",
         "^" to "~",
         // Remark: EN-sigen code may changed at edit by vim, occure a build error.
@@ -284,7 +297,7 @@ class JapaneseKeyboardService : InputMethodService() {
         // other
         keyCodeToMoji( R.id.key_hyphen     , "ホ" ),
         keyCodeToMoji( R.id.key_ensign     , "ー" ),
-        keyCodeToMoji( R.id.key_yama       , "へ" ),
+        keyCodeToMoji( R.id.key_yama       , "ヘ" ),
         keyCodeToMoji( R.id.key_semicolon  , "レ" ),
         keyCodeToMoji( R.id.key_colon      , "ケ" ),
         keyCodeToMoji( R.id.key_r_kakukakko, "ム" ),
@@ -296,19 +309,19 @@ class JapaneseKeyboardService : InputMethodService() {
     private val engToKatakanaShiftOffMap = arrayOf(
         // NOTE: Use only UTF-8 of Japanease language.
         // 0 to 9
-        keyCodeToMoji( R.id.key_3, "ア" ),
-        keyCodeToMoji( R.id.key_4, "ウ" ),
-        keyCodeToMoji( R.id.key_5, "エ" ),
-        keyCodeToMoji( R.id.key_6, "オ" ),
-        keyCodeToMoji( R.id.key_7, "ヤ" ),
-        keyCodeToMoji( R.id.key_8, "ユ" ),
-        keyCodeToMoji( R.id.key_9, "ヨ" ),
-        keyCodeToMoji( R.id.key_0, "ワ" ),
-        keyCodeToMoji( R.id.key_e, "イ" ),
-        keyCodeToMoji( R.id.key_z, "ツ" ),
-        keyCodeToMoji( R.id.key_comma      , "ネ" ),
-        keyCodeToMoji( R.id.key_pochi      , "ル" ),
-        keyCodeToMoji( R.id.key_slash      , "メ" ),
+        keyCodeToMoji( R.id.key_3,      "ア" ),
+        keyCodeToMoji( R.id.key_4,      "ウ" ),
+        keyCodeToMoji( R.id.key_5,      "エ" ),
+        keyCodeToMoji( R.id.key_6,      "オ" ),
+        keyCodeToMoji( R.id.key_7,      "ヤ" ),
+        keyCodeToMoji( R.id.key_8,      "ユ" ),
+        keyCodeToMoji( R.id.key_9,      "ヨ" ),
+        keyCodeToMoji( R.id.key_0,      "ワ" ),
+        keyCodeToMoji( R.id.key_e,      "イ" ),
+        keyCodeToMoji( R.id.key_z,      "ツ" ),
+        keyCodeToMoji( R.id.key_comma,  "ネ" ),
+        keyCodeToMoji( R.id.key_pochi,  "ル" ),
+        keyCodeToMoji( R.id.key_slash,  "メ" ),
     )
 
     private val engToKatakanaShiftOnMap = arrayOf(
@@ -370,6 +383,10 @@ class JapaneseKeyboardService : InputMethodService() {
 
         root.setBackgroundColor(COLOR_KEYBOARD_BACKGROUNDY)
 
+        if ( ENABLE_KEY_VIBRATION ) {
+            root.isHapticFeedbackEnabled = true
+        }
+
         // Initialize converter: prefer SQLite dictionary; fallback to TSV; then to simple built-in
         converter = sqliteConverter ?: try {
             DictionaryConverter(this)
@@ -384,7 +401,11 @@ class JapaneseKeyboardService : InputMethodService() {
         // Remark: setRepeatableKey is original API.
         root.findViewById<View>(R.id.key_backspace)?.let { v ->
             //----------  Event Start ------------------------------------
-            setRepeatableKey(v, initialDelay= TIME_REPEAT_START_DELAY_BS, repeatInterval = TIME_REPEAT_INTERVAL_BS) {
+            setRepeatableKey(
+                v,
+                initialDelay = TIME_REPEAT_START_DELAY_BS,
+                repeatInterval = TIME_REPEAT_INTERVAL_BS
+            ) {
                 backSpaceText()
                 consumeOneShotModifiers()
             }
@@ -393,17 +414,32 @@ class JapaneseKeyboardService : InputMethodService() {
         // Remark: setRepeatableKey is original API.
         root.findViewById<View>(R.id.key_del)?.let { v ->
             //----------  Event Start ------------------------------------
-            setRepeatableKey(v, initialDelay= TIME_REPEAT_START_DELAY_BS, repeatInterval = TIME_REPEAT_INTERVAL_BS) {
+            setRepeatableKey(
+                v,
+                initialDelay = TIME_REPEAT_START_DELAY_BS,
+                repeatInterval = TIME_REPEAT_INTERVAL_BS
+            ) {
                 deleteText()
                 consumeOneShotModifiers()
             }
         }
         /******* Press Enter Key ******/
-        root.findViewById<View>(R.id.key_enter)?.let { v ->
-            //----------  Event Start ------------------------------------
-            setRepeatableKey(v) {
-                sendEnter()
-                consumeOneShotModifiers()
+        if (ENABLE_REPEAT_ENTER) {
+            root.findViewById<View>(R.id.key_enter)?.let { v ->
+                //----------  Event Start ------------------------------------
+                setRepeatableKey(v) {
+                    sendEnter()
+                    consumeOneShotModifiers()
+                }
+            }
+        }
+        else {
+            root.findViewById<View>(R.id.key_enter)?.let { v ->
+                setImeLongPressKey( v,  waittime = TIME_PRESS_ENTER	) {
+                //----------  Event Start ------------------------------------
+                    sendEnter()
+                    consumeOneShotModifiers()
+                }
             }
         }
 
@@ -505,7 +541,11 @@ class JapaneseKeyboardService : InputMethodService() {
         langBtn = root.findViewById<Button>(R.id.key_lang_toggle)
         langBtn?.setOnClickListener {
             //----------  Event Start ------------------------------------
+            Log.d(mydbg, "Acceot change mode.");
             toggleKanaMode()
+            if ( ENABLE_FLUSH_AT_MODE_CHANGE ) {
+                confirmText()
+            }
         }
         updateLangToggleUI()
 
@@ -558,10 +598,11 @@ class JapaneseKeyboardService : InputMethodService() {
 			}
         }
 
-        /******* ESC (repeat enabled) *********/
-        root.findViewById<View>(R.id.key_esc)?.let { v ->
+        /******* ESC (repeat disabled) *********/
+        // Do not need usually the repeat to this key.
+        root.findViewById<View>(R.id.key_esc)?.let { btn ->
             //----------  Event Start ------------------------------------
-            setRepeatableKey(v) {
+            btn?.setOnClickListener {
                 if (ENABLE_CANCEL_AT_ESCAPE_NOT_SEND_EVENT == true ) {
                     if ( isNeedConvertKanji() ) {
                         if ( isInConversion() ) {
@@ -569,12 +610,12 @@ class JapaneseKeyboardService : InputMethodService() {
                             cancelConversionRestore()
                         }
                         else {
-                            var nowStr = romaji.getComposing()
-                            if (nowStr != null && nowStr.length > 0) {
+                            var nowStr = romaji.GetComposing()
+                            //if (nowStr != null && nowStr.length > 0) {    /*Warning "Condition is always true" */
                                 // Clear inputed KANA.
-                                romaji.clear()
+                                romaji.Clear()
                                 currentInputConnection?.setComposingText("", 1)
-                            }
+                            //}  /*Warning "Condition is always true" */
                         }
                     }
                 }
@@ -583,11 +624,12 @@ class JapaneseKeyboardService : InputMethodService() {
                 }
 			}
         }
-        /******* TAB (repeat enabled) *********/
-        root.findViewById<View>(R.id.key_tab)?.let { v ->
+        /******* TAB (repeat disabled) *********/
+        // Do not need usually the repeat to this key.
+        root.findViewById<View>(R.id.key_tab)?.let { btn ->
             //----------  Event Start ------------------------------------
-            setRepeatableKey(v) {
-				 flushComposingOrConversionIfNeeded(); sendSimpleKey(KeyEvent.KEYCODE_TAB); consumeOneShotModifiers() 
+            btn?.setOnClickListener {
+				 flushComposingOrConversionIfNeeded(); sendSimpleKey(KeyEvent.KEYCODE_TAB); consumeOneShotModifiers()
 			}
         }
 
@@ -598,6 +640,39 @@ class JapaneseKeyboardService : InputMethodService() {
                 var intentHelp : Intent = Intent( getApplication(), MainActivity::class.java)
                 intentHelp.addFlags( Intent.FLAG_ACTIVITY_NEW_TASK );
                 startActivity( intentHelp )
+            }
+        }
+
+        /************** No convert ***********/
+        root.findViewById<Button>(R.id.key_no_conv)?.let { btn ->
+            //----------  Event Start ------------------------------------
+            btn.setOnClickListener {
+                // When converting, revert to input text.
+                if (isInConversion()) {
+                    cancelConversionRestore()
+                }
+                // When mode is HIRAGANA, convert to KATAKANA.
+                else if (inputMode == MODE_HIRAGANA ) {
+                    val text = romaji.HiraganaToKatakana()
+                    val ic = currentInputConnection
+                    if (ic != null) {
+                        ic.commitText(text, 1)
+                        ic.finishComposingText()
+                    }
+                }
+                // When mode is KATAKANA, commit a text.
+                else if (inputMode == MODE_KATAKANA) {
+                    confirmText()
+                }
+            }
+        }
+
+        /************** Undo view ***********/
+        // NOTE: The core of ImageButton is not Button.
+        root.findViewById<ImageButton>(R.id.key_undo)?.let { btn ->
+            //----------  Event Start ------------------------------------
+            btn.setOnClickListener {
+                sendKeyWithMeta(KeyEvent.KEYCODE_Z, KeyEvent.META_CTRL_ON)
             }
         }
 
@@ -733,15 +808,32 @@ class JapaneseKeyboardService : InputMethodService() {
             return
         }
 
-        // Change height of all buttons.
-        // - Height of buttons is set match_parent. So the height is adjusted automatcaly by height of row frame.
-        // - Height of row frame is set fixed value.
-        // - Height of key board frame is adjusted automatcaly b height of row frame.
-        for (i in 0 until kbFrame.childCount) {
-            var rowFrame = kbFrame.getChildAt(i)
+        changeRowHeight( kbFrame, newHeightPx, 1 )  // Change height of all buttons.
+
+        // Change height to KANJI convert candidates frames.
+        for (caFrame in arrayOf(segmentList, candidateContainer, candidateList) ) {
+            val params = caFrame?.layoutParams
+            params?.let {
+                it.height = newHeightPx + PANDING_ROW /*panding*/
+                caFrame.layoutParams = it
+            }
+        }
+    }
+
+    //============ Function Start ============================================
+    // Change height of all buttons.
+    // - Height of buttons is set match_parent. So the height is adjusted automatcaly by height of row frame.
+    // - Height of row frame is set fixed value.
+    // - Height of key board frame is adjusted automatcaly b height of row frame.
+    private fun changeRowHeight( keyboardframe: LinearLayout, newHeightPx : Int, nestLvl : Int ) {
+        for (i in 0 until keyboardframe.childCount) {
+            if ( nestLvl > 3 ) return   // Guard for infinite recursive call
+
+            var rowFrame = keyboardframe.getChildAt( i )
             if ( !( rowFrame is LinearLayout ) ) continue
 
             // NOTE: Targets linearLayouts is set id-name to "row_".
+            if ( rowFrame.id == View.NO_ID ) continue
             val idName = resources.getResourceName(rowFrame.id)
             if ( idName == null ) continue
 
@@ -752,14 +844,8 @@ class JapaneseKeyboardService : InputMethodService() {
                     rowFrame.layoutParams = it
                 }
             }
-        }
-
-        // Change height to KANJI convert candidates frames.
-        for (caFrame in arrayOf(segmentList, candidateContainer, candidateList) ) {
-            val params = caFrame?.layoutParams
-            params?.let {
-                it.height = newHeightPx + PANDING_ROW /*panding*/
-                caFrame.layoutParams = it
+            else {  // Case LinearLayout is nestting.
+                changeRowHeight( rowFrame, newHeightPx, nestLvl + 1 )    // NOTE: recursive call
             }
         }
     }
@@ -823,26 +909,34 @@ class JapaneseKeyboardService : InputMethodService() {
         if (view is Button) {
             val tag = view.tag as? String ?: return
             when {
+                /******* keys a...z signs (repeat enabled) *******/
                 tag.startsWith("letter:") -> {
                     val base = tag.removePrefix("letter:")
                     letterButtons.add(view)
                     // Initial label based on shift state
                     view.text = if (shiftOn) base.uppercase() else base.lowercase()
                     //---------- Key input event start ----------------
-                    setRepeatableKey(view) {
+                    // NOTE: There is case the view is not targetBtn.
+                    //       When key down, slide and up at next key, targetBtn is next key.
+                    setRepeatableKey(view) { targetBtn ->
+                        val targetTag = targetBtn?.tag as? String ?: "" /*Dummy*/
+                        val targetBase = targetTag?.removePrefix("letter:") ?: "" /*Dummy*/
+
+                        Log.d(mydbg,"catch PRESS=" + targetBase)
+
                         if (inputMode == MODE_ROMA) {
-                            handleRomaKanaLetter(base)
+                            handleRomaKanaLetter( targetBase )
                         }
                         else if (inputMode == MODE_HIRAGANA) {
-                            handleHiraganaLetter(view)
+                            handleHiraganaLetter( targetBtn )
                         }
                         else if (inputMode == MODE_KATAKANA) {
-                            handleKatakanaLetter(view)
+                            handleKatakanaLetter( targetBtn )
                         }
                         else {
-                            val text = if (shiftOn) base.uppercase() else base.lowercase()
+                            val text = if (shiftOn) targetBase.uppercase() else targetBase.lowercase()
                             if (ctrlOn) {
-                                val code = letterToKeyCode(base)
+                                val code = letterToKeyCode( targetBase )
                                 if (code != null) sendKeyWithMeta(code, KeyEvent.META_CTRL_ON) else commitText(text)
                             } else {
                                 commitText(text)
@@ -852,6 +946,7 @@ class JapaneseKeyboardService : InputMethodService() {
                     }
                     //---------- Key input event end ----------------
                 }
+                /******* keys 1..0 signs (repeat enabled) *******/
                 tag.startsWith("symbol:") -> {
                     val base = tag.removePrefix("symbol:")
                     symbolButtons.add(view to base)
@@ -859,16 +954,21 @@ class JapaneseKeyboardService : InputMethodService() {
                     val label = if (shiftOn) shiftSymbolMap[base] ?: base else base
                     view.text = label
                     //---------- Key input event start ----------------
-                    setRepeatableKey(view) {
+                    // NOTE: There is case the view is not targetBtn.
+                    //       When key down, slide and up at next key, targetBtn is next key.
+                    setRepeatableKey(view) { targetBtn ->
+                        val targetTag = targetBtn?.tag as? String ?: "" /*Dummy*/
+                        val targetBase = targetTag?.removePrefix("symbol:") ?: "" /*Dummy*/
+
                         if (inputMode == MODE_HIRAGANA) {
-                            handleHiraganaLetter(view)
+                            handleHiraganaLetter( targetBtn )
                         }
                         else if (inputMode == MODE_KATAKANA) {
-                            handleKatakanaLetter(view)
+                            handleKatakanaLetter( targetBtn )
                         }
                         else {
-                            var out = if (shiftOn) shiftSymbolMap[base] ?: base else base
-                            if (view.id == R.id.key_backslash ) {
+                            var out = if (shiftOn) shiftSymbolMap[targetBase] ?: targetBase else targetBase
+                            if ( view.id == R.id.key_backslash ) {
                                 out = if (shiftOn) "_" else "\\"
                             }
 
@@ -1044,20 +1144,27 @@ class JapaneseKeyboardService : InputMethodService() {
         view: View,
         initialDelay: Long = TIME_REPEAT_START_DELAY,
         repeatInterval: Long = TIME_REPEAT_INTERVAL,
-        action: () -> Unit
+        action: (Button) -> Unit
     ) {
         view.setOnTouchListener { v, ev ->
             when (ev.actionMasked) {
            		//----------  Event Start ------------------------------------
                 MotionEvent.ACTION_DOWN -> {
+                    val id = resources.getResourceName(v.id)
+                    val x  = ev.getX()
+                    val y  = ev.getY()
+                    Log.d(mydbg,"ACTION_DOWN x=" + x + " y=" + y + " id=" + id)
+
+                    lastPressKey = v as Button
                     v.isPressed = true
                     // Fire immediately
-                    action()
+                    // action()    // NOTE: When up the key, should occure an enevt.
                     // Schedule repeats
          			//----------  Task Start ----------------------------------
                     val task = object : Runnable {
                         override fun run() {
-                            action()
+                            Log.d(mydbg,"ACTION_REPEAT")
+                            action( lastPressKey )
                             repeatHandler.postDelayed(this, repeatInterval)
                         }
                     }
@@ -1067,7 +1174,57 @@ class JapaneseKeyboardService : InputMethodService() {
                     true
                 }
            		//----------  Event Start ------------------------------------
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_OUTSIDE -> {
+                MotionEvent.ACTION_UP -> {
+                    // NOTE: The postion is offset from root of a button.
+                    val x  = ev.getX()
+                    val y  = ev.getY()
+
+                    repeatTasks.remove(v)?.let { repeatHandler.removeCallbacks(it) }
+
+                    val id = resources.getResourceName(lastPressKey?.id ?: -1)
+                    Log.d(mydbg,"ACTION_UP x=" + x + " y=" + y + " id=" + id)
+                    lastPressKey?.isPressed = false
+
+                    Log.d(mydbg, "run ACTION.")
+                    // key Vibration    ToDo: Do not has vibration now.
+                    if (ENABLE_KEY_VIBRATION == true) {
+                        lastPressKey?.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                    }
+
+                    action( lastPressKey )    // NOTE: When up the key, should occure an enevt.
+                    true
+                }
+                //----------  Event Start ------------------------------------
+                MotionEvent.ACTION_MOVE -> {
+                    // NOTE: The postion is offset from root of a button.
+                    var offset = IntArray(2)
+                    v. getLocationInWindow( offset )    // Get position on this activity.
+                    val x  = ev.getX() + offset[0]
+                    val y  = ev.getY() + offset[1]
+
+                    val nowPressKey = findKeyAt(x.toInt(), y.toInt())  // Get a key at now position.
+
+                    if ( nowPressKey != null ) {    // found !!
+                        if ( lastPressKey != nowPressKey ) {    // Case move the pressing to next key.
+                            val id = resources.getResourceName(nowPressKey.id)
+                            Log.d(mydbg,"ACTION_MOVE x=" + x + " y=" + y + " id=" + id )
+
+                            repeatTasks.remove(v)?.let { repeatHandler.removeCallbacks(it) }
+
+                            lastPressKey?.isPressed = false
+                            nowPressKey?.isPressed = true
+                            lastPressKey = nowPressKey
+                            Log.d(mydbg,"MOVE to next key.")
+                        }
+                    }
+                    else {
+                        // NOTE: Usually there is no not set nowPressKey.
+                    }
+                    true
+                }
+                //----------  Event Start ------------------------------------
+                MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_OUTSIDE -> {
+                    Log.d(mydbg,"ACTION_CANCEL")
                     v.isPressed = false
                     repeatTasks.remove(v)?.let { repeatHandler.removeCallbacks(it) }
                     true
@@ -1075,6 +1232,32 @@ class JapaneseKeyboardService : InputMethodService() {
                 else -> false
             }
         }
+    }
+
+    //============ Function Start ============================================
+    // Get a view that  layouted at position of arguments.
+    private fun findKeyAt(rawX: Int, rawY: Int): Button? {
+        val rect = Rect()
+
+        // ToDo: Genrate RECT tabel at onCreateView.
+        //       Optimaze search algorithm. Ex)  Backword search, sort ...
+
+        // Seach a position match key. a to z.
+        for (btn: Button in letterButtons ) {
+            if (btn.visibility != View.VISIBLE) continue
+            btn.getGlobalVisibleRect( rect )  // Get position of a key button.
+            // Log.d(mydbg, "RECT1 x1:" + rect.left + ",y1=" + rect.top + ",x2:" + rect.right + ",y2" + rect.bottom) /*For Detail DBG*/
+            if (rect.contains( rawX, rawY ))  return btn    // Found!!
+        }
+
+        // Seach a position match key. 1 to 0.
+        for ((btn : Button , base) in symbolButtons) {
+            if ( btn.visibility != View.VISIBLE ) continue
+            btn.getGlobalVisibleRect( rect )  // Get position of a key button.
+            // Log.d(mydbg, "RECT2 x1:" + rect.left + ",y1=" + rect.top + ",x2:" + rect.right + ",y2" + rect.bottom) /*For Detail DBG*/
+            if (rect.contains( rawX, rawY ))  return btn    // Found!!
+        }
+        return null
     }
 
 	//============ Function Start ============================================
@@ -1146,6 +1329,7 @@ class JapaneseKeyboardService : InputMethodService() {
 
 	//============ Function Start ============================================
     private fun commitText(text: String) {
+        Log.d(mydbg,"outText=" + text)
         currentInputConnection?.commitText(text, 1)
     }
 
@@ -1157,7 +1341,7 @@ class JapaneseKeyboardService : InputMethodService() {
                 return
             }
             if (romaji.hasComposing()) {
-                romaji.backspace()
+                romaji.Backspace()
                 updateComposingText()
                 return
             }
@@ -1173,12 +1357,20 @@ class JapaneseKeyboardService : InputMethodService() {
                 return
             }
             if (romaji.hasComposing()) {
-                romaji.delete()
+                romaji.Delete()
                 updateComposingText()
                 return
             }
         }
         currentInputConnection?.deleteSurroundingText(0, 1)
+    }
+
+    //============ Function Start ============================================
+    private fun confirmText() {
+        val ic = currentInputConnection ?: return
+        val text = romaji.Flush()
+        ic.commitText(text, 1)
+        ic.finishComposingText()
     }
 
 	//============ Function Start ============================================
@@ -1192,7 +1384,7 @@ class JapaneseKeyboardService : InputMethodService() {
                 return
             }
             if (romaji.hasComposing()) {
-                val text = romaji.flush()
+                val text = romaji.Flush()
                 ic.commitText(text, 1)
                 ic.finishComposingText()
                 return
@@ -1289,7 +1481,8 @@ class JapaneseKeyboardService : InputMethodService() {
             btn.text = MODE_DSPTXT[inputMode]
             // Disable shift while in kana mode
             var mode = false
-            var alpha = 0.5f    /* gray mask */
+            var alpha = COLOR_MASK_BUTTON_AT_PRESS   /* gray mask */
+
             if (inputMode == MODE_ASCII    ||
                 inputMode == MODE_HIRAGANA ||
                 inputMode == MODE_KATAKANA) {
@@ -1322,7 +1515,7 @@ class JapaneseKeyboardService : InputMethodService() {
                         if (romaji.hasComposing()) {
                             currentInputConnection?.finishComposingText()
                         }
-                        romaji.clear()
+                        romaji.Clear()
                     }
                     // Invalidate any in-flight conversion queries
                     convQuerySeq++
@@ -1349,7 +1542,7 @@ class JapaneseKeyboardService : InputMethodService() {
 	//============ Function Start ============================================
     private fun updateComposingText() {
         val ic = currentInputConnection ?: return
-        val text = romaji.getComposing()
+        val text = romaji.GetComposing()
         if (text.isEmpty()) {
             ic.finishComposingText()
         } else {
@@ -1379,7 +1572,7 @@ class JapaneseKeyboardService : InputMethodService() {
             }
         }
         val c = base[0]
-        romaji.pushChar(c)
+        romaji.PushChar(c)
         updateComposingText()
     }
 
@@ -1395,7 +1588,7 @@ class JapaneseKeyboardService : InputMethodService() {
             }
         }
         val text = base?.text.toString()
-        romaji.pushHiraganaChar(text)
+        romaji.PushHiraganaChar(text)
         updateComposingText()
     }
 
@@ -1411,7 +1604,7 @@ class JapaneseKeyboardService : InputMethodService() {
             }
         }
         val text = base?.text.toString()
-        romaji.pushKatakanaChar(text)
+        romaji.PushKatakanaChar(text)
         updateComposingText()
     }
 
@@ -1420,7 +1613,7 @@ class JapaneseKeyboardService : InputMethodService() {
         if (inputMode != MODE_ASCII) return
         if (romaji.hasComposing()) {
             val ic = currentInputConnection ?: return
-            val text = romaji.flush()
+            val text = romaji.Flush()
             ic.commitText(text, 1)
             ic.finishComposingText()
         }
@@ -1442,7 +1635,7 @@ class JapaneseKeyboardService : InputMethodService() {
 	//============ Function Start ============================================
     private fun startConversion() {
         val ic = currentInputConnection ?: return
-        val reading = romaji.flush()
+        val reading = romaji.Flush()
         if (reading.isEmpty()) return
         conversionReading = reading
         // start new conversion session (invalidate in-flight queries)
@@ -1646,7 +1839,7 @@ class JapaneseKeyboardService : InputMethodService() {
         conversionReading = null
         convQuerySeq++
         candidates = emptyList()
-        romaji.restoreFromKana(reading)
+        romaji.RestoreFromKana(reading)
         ic.setComposingText(reading, 1)
     }
 

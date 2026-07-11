@@ -1,5 +1,4 @@
 import java.nio.charset.StandardCharsets
-import java.net.URLClassLoader as JUrlClassLoader
 import java.sql.DriverManager as JDriverManager
 import java.sql.Statement as JdbcStatement
 
@@ -19,11 +18,11 @@ buildscript {
 }
 
 android {
-    namespace = "dev.moto4app.J_KeyboardKanaPlus"
+    namespace = "com.motoplus4.J_KeyboardKanaPlus"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "dev.moto4app.J_KeyboardKanaPlus"
+        applicationId = "com.moto4app.J_KeyboardKanaPlus"
         minSdk = 28
         targetSdk = 36
         versionCode = 1

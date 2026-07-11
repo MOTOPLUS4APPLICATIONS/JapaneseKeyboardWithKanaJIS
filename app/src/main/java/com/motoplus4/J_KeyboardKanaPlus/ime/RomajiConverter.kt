@@ -6,8 +6,11 @@
       Licensed Material of Moto+4 Applications LLC.
  */
 
-package dev.moto4app.J_KeyboardKanaPlus.ime
+package com.motoplus4.J_KeyboardKanaPlus.ime
 
+import android.util.Log
+import com.motoplus4.J_KeyboardKanaPlus.R
+import com.motoplus4.J_KeyboardKanaPlus.ime.JapaneseKeyboardService.keyCodeToMoji
 import kotlin.arrayOf
 
 /**
@@ -18,8 +21,16 @@ import kotlin.arrayOf
  * - Keeps produced Kana separate from pending romaji buffer
  */
 class RomajiConverter {
+//===============================================================================
+//            S E C T O I N   C O M M O N   V A R I A B L E
+//===============================================================================
     private val produced = StringBuilder()
     private val buffer = StringBuilder()
+
+//===============================================================================
+//          S E C T O I N   C O N S T A N  T  D A T A
+//===============================================================================
+    private val mydbg = "[MYDBG3]"
 
     private val vowels = setOf('a','i','u','e','o')
 
@@ -89,6 +100,93 @@ class RomajiConverter {
         "xa" to "ぁ", "xi" to "ぃ", "xu" to "ぅ", "xe" to "ぇ", "xo" to "ぉ"
     )
 
+    private val HiraganaToKatakanaMap = listOf(
+            arrayOf( "ぁ", "ァ" ),
+            arrayOf( "あ", "ア" ),
+            arrayOf( "ぃ", "ィ" ),
+            arrayOf( "い", "イ" ),
+            arrayOf( "ぅ", "ゥ" ),
+            arrayOf( "う", "ウ" ),
+            arrayOf( "ぇ", "ェ" ),
+            arrayOf( "え", "エ" ),
+            arrayOf( "ぉ", "ォ" ),
+            arrayOf( "お", "オ" ),
+            arrayOf( "か", "カ" ),
+            arrayOf( "が", "ガ" ),
+            arrayOf( "き", "キ" ),
+            arrayOf( "ぎ", "ギ" ),
+            arrayOf( "く", "ク" ),
+            arrayOf( "ぐ", "グ" ),
+            arrayOf( "け", "ケ" ),
+            arrayOf( "げ", "ゲ" ),
+            arrayOf( "こ", "コ" ),
+            arrayOf( "ご", "ゴ" ),
+            arrayOf( "さ", "サ" ),
+            arrayOf( "ざ", "ザ" ),
+            arrayOf( "し", "シ" ),
+            arrayOf( "じ", "ジ" ),
+            arrayOf( "す", "ス" ),
+            arrayOf( "ず", "ズ" ),
+            arrayOf( "せ", "セ" ),
+            arrayOf( "ぜ", "ゼ" ),
+            arrayOf( "そ", "ソ" ),
+            arrayOf( "ぞ", "ゾ" ),
+            arrayOf( "た", "タ" ),
+            arrayOf( "だ", "ダ" ),
+            arrayOf( "ち", "チ" ),
+            arrayOf( "ぢ", "ヂ" ),
+            arrayOf( "っ", "ッ" ),
+            arrayOf( "つ", "ツ" ),
+            arrayOf( "づ", "ヅ" ),
+            arrayOf( "て", "テ" ),
+            arrayOf( "で", "デ" ),
+            arrayOf( "と", "ト" ),
+            arrayOf( "ど", "ド" ),
+            arrayOf( "な", "ナ" ),
+            arrayOf( "に", "ニ" ),
+            arrayOf( "ぬ", "ヌ" ),
+            arrayOf( "ね", "ネ" ),
+            arrayOf( "の", "ノ" ),
+            arrayOf( "は", "ハ" ),
+            arrayOf( "ば", "バ" ),
+            arrayOf( "ぱ", "パ" ),
+            arrayOf( "ひ", "ヒ" ),
+            arrayOf( "び", "ビ" ),
+            arrayOf( "ぴ", "ピ" ),
+            arrayOf( "ふ", "フ" ),
+            arrayOf( "ぶ", "ブ" ),
+            arrayOf( "ぷ", "プ" ),
+            arrayOf( "へ", "ヘ" ),
+            arrayOf( "べ", "ベ" ),
+            arrayOf( "ぺ", "ペ" ),
+            arrayOf( "ほ", "ホ" ),
+            arrayOf( "ぼ", "ボ" ),
+            arrayOf( "ぽ", "ポ" ),
+            arrayOf( "ま", "マ" ),
+            arrayOf( "み", "ミ" ),
+            arrayOf( "む", "ム" ),
+            arrayOf( "め", "メ" ),
+            arrayOf( "も", "モ" ),
+            arrayOf( "ゃ", "ャ" ),
+            arrayOf( "や", "ヤ" ),
+            arrayOf( "ゅ", "ュ" ),
+            arrayOf( "ゆ", "ユ" ),
+            arrayOf( "ょ", "ョ" ),
+            arrayOf( "よ", "ヨ" ),
+            arrayOf( "ら", "ラ" ),
+            arrayOf( "り", "リ" ),
+            arrayOf( "る", "ル" ),
+            arrayOf( "れ", "レ" ),
+            arrayOf( "ろ", "ロ" ),
+            arrayOf( "わ", "ワ" ),
+            arrayOf( "を", "ヲ" ),
+            arrayOf( "ん", "ン" ),
+            arrayOf( "ゔ", "ヴ" )
+    )
+
+//===============================================================================
+//                      S E C T O I N   P R O G R A M
+//===============================================================================
     data class dakutenToMoji (
         var  seion : String,    // ex) た
         var  dakuon : String    // ex) だ
@@ -158,29 +256,29 @@ class RomajiConverter {
         dakutenToMoji( "ホ", "ポ" ),
     )
 
-    fun clear() {
+    public fun Clear() {
         produced.clear()
         buffer.clear()
     }
 
-    fun hasComposing(): Boolean = produced.isNotEmpty() || buffer.isNotEmpty()
+    public fun hasComposing(): Boolean = produced.isNotEmpty() || buffer.isNotEmpty()
 
-    fun pushChar(c: Char) {
+    public fun PushChar(c: Char) {
         val ch = c.lowercaseChar()
         if (ch !in 'a'..'z') return // ignore non-letters here
         buffer.append(ch)
         consume()   // Alphabets convert to kana.
     }
 
-    fun pushHiraganaChar(str: String) {
+    public fun PushHiraganaChar(str: String) {
         pushKanaCharCore( str, HiraganaDakutenToMojiMap, HiraganaHandakutenToMojiMap )
     }
 
-    fun pushKatakanaChar(str: String) {
+    public fun PushKatakanaChar(str: String) {
         pushKanaCharCore( str, KatakanaDakutenToMojiMap, KatakanaHandakutenToMojiMap )
     }
 
-    fun pushKanaCharCore(
+    private fun pushKanaCharCore(
         str: String,
         dakuonMap    :Array<dakutenToMoji>,
         handakuonMap :Array<dakutenToMoji>
@@ -212,7 +310,7 @@ class RomajiConverter {
         buffer.append(str)  // case: no dakuon at first KANA, umtach dakuon
     }
 
-    fun backspace() {
+    public fun Backspace() {
         if (buffer.isNotEmpty()) {
             buffer.deleteCharAt(buffer.lastIndex)
             return
@@ -222,7 +320,7 @@ class RomajiConverter {
         }
     }
 
-    fun delete() {
+    public fun Delete() {
         if (buffer.isNotEmpty()) {
             if (buffer.lastIndex > 0) buffer.deleteCharAt( buffer.lastIndex-1 )
             return
@@ -232,20 +330,41 @@ class RomajiConverter {
         }
     }
 
-    fun getComposing(): String {
+    public fun GetComposing(): String {
         // Show produced kana and any pending raw romaji so consonants are visible while composing.
         return produced.toString() + buffer.toString()
     }
 
-    fun flush(): String {
+    public fun Flush(): String {
         // Finalize pending buffer (resolve 'n' to ん, and emit any leftover romaji literally)
         finalizeN()
         val out = produced.toString() + buffer.toString()
-        clear()
+        Log.d(mydbg, "Flush txt=" + out);
+        Clear()
         return out
     }
 
-    fun restoreFromKana(kana: String) {
+    public fun HiraganaToKatakana(): String {
+        finalizeN()
+        val out = produced.toString() + buffer.toString()
+
+        var newOut : String = ""
+        for( ch in out ) {
+            val idx = HiraganaToKatakanaMap.binarySearch { it[0].compareTo(ch.toString()) }
+            if ( idx >= 0) {
+                newOut += HiraganaToKatakanaMap[idx][1]
+            }
+            else {
+                newOut += ch.toString()
+            }
+        }
+
+        Log.d(mydbg, "Katakana txt=" + newOut);
+        Clear()
+        return newOut
+    }
+
+    public fun RestoreFromKana(kana: String) {
         produced.setLength(0)
         produced.append(kana)
         buffer.setLength(0)

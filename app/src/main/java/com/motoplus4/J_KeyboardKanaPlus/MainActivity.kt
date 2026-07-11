@@ -6,19 +6,18 @@
       Licensed Material of Moto+4 Applications LLC.
  */
 
-package dev.moto4app.J_KeyboardKanaPlus
+package com.motoplus4.J_KeyboardKanaPlus
 
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import android.util.Log;
-import android.view.View
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import android.widget.Button
 import android.widget.TextView
 import android.content.Intent
-import dev.moto4app.J_KeyboardKanaPlus.ui.LicenseActivity
+import com.motoplus4.J_KeyboardKanaPlus.ui.LicenseActivity
 
 class MainActivity : AppCompatActivity() {
     var mydbg = "[MYDBG1]"

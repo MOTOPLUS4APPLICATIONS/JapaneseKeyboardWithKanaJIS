@@ -1,4 +1,4 @@
-package dev.moto4app.J_KeyboardKanaPlus
+package com.motoplus4.J_KeyboardKanaPlus
 
 import org.junit.Test
 

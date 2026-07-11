@@ -5,11 +5,11 @@
     All Rights Reserved, Copyright (C) 2026, Moto+4 Applications LLC
       Licensed Material of Moto+4 Applications LLC.
  */
-package dev.moto4app.J_KeyboardKanaPlus.ui
+package com.motoplus4.J_KeyboardKanaPlus.ui
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import dev.moto4app.J_KeyboardKanaPlus.R
+import com.motoplus4.J_KeyboardKanaPlus.R
 import android.widget.TextView
 
 class LicenseActivity : AppCompatActivity() {

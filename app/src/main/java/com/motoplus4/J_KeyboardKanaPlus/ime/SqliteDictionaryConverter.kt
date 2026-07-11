@@ -1,7 +1,6 @@
-package dev.moto4app.J_KeyboardKanaPlus.ime
+package com.motoplus4.J_KeyboardKanaPlus.ime
 
 import android.content.Context
-import android.util.Log;
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteStatement
 import java.io.BufferedReader

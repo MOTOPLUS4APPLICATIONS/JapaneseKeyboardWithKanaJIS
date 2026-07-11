@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "OasizJapaneseKeyboard"
+rootProject.name = "J-KeyboardKanaPlus"
 include(":app")

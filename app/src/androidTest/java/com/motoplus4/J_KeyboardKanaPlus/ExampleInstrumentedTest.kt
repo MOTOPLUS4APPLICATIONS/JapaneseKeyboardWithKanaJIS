@@ -1,4 +1,4 @@
-package dev.moto4app.J_KeyboardKanaPlus
+package com.motoplus4.J_KeyboardKanaPlus
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
