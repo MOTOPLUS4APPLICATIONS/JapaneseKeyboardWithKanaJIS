@@ -20,10 +20,10 @@ Buildは、Android Studio 2026.1月版を使用しています。2024版では�
 <img width="500" alt="バックスラッシュ" src="./screen_shot4.png" /><br>
 <br>
 
-ご自分でbuildできない方用に、google play公開版を用意しました。以下URLです。
-https://play.google.com/store/apps/details?id=com.motoplus4.J_KeyBoardKanaPlus&hl=ja
-公開版以降はセキュリティ情報等を含むためコードは掲載していません。
-こちの方が改善が進んでいます。
+ご自分でbuildできない方用に、google play公開版を用意しました。以下URLです。<br>
+https://play.google.com/store/apps/details?id=com.motoplus4.J_KeyBoardKanaPlus&hl=ja<br>
+公開版以降はセキュリティ情報等を含むためコードは掲載していません。<br>
+こちの方が改善が進んでいます。<br>
 
 気になるところ、直したいとおもっていることろ
 1. 文字をもう少し大きく。
