@@ -3,7 +3,6 @@
 
 弊方含めPCキーボードでかな打ち派のために、本家より以下の部分を追加変更しました。ブランチ:KANA_Optimize
 refs/heads/main です。 
-未だ単一機種でしかTESTしていません。
 Buildは、Android Studio 2026.1月版を使用しています。2024版ではダメでした。
 
 1. JIS配列かなキーボート追加
@@ -20,6 +19,11 @@ Buildは、Android Studio 2026.1月版を使用しています。2024版では�
 <img width="500" alt="シフトロック" src="./screen_shot3.png" /><br>
 <img width="500" alt="バックスラッシュ" src="./screen_shot4.png" /><br>
 <br>
+
+ご自分でbuildできない方用に、google play公開版を用意しました。以下URLです。
+https://play.google.com/store/apps/details?id=com.motoplus4.J_KeyBoardKanaPlus&hl=ja
+公開版以降はセキュリティ情報等を含むためコードは掲載していません。
+こちの方が改善が進んでいます。
 
 気になるところ、直したいとおもっていることろ
 1. 文字をもう少し大きく。
