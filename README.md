@@ -21,7 +21,7 @@ Buildは、Android Studio 2026.1月版を使用しています。2024版では�
 <br>
 
 ご自分でbuildできない方用に、google play公開版を用意しました。以下URLです。<br>
-<a herf="https://play.google.com/store/apps/details?id=com.motoplus4.J_KeyBoardKanaPlus&hl=ja">https://play.google.com/store/apps/details?id=com.motoplus4.J_KeyBoardKanaPlus&hl=ja</a>
+<a herf="https://play.google.com/store/apps/details?id=com.motoplus4.J_KeyBoardKanaPlus&hl=ja">https://play.google.com/store/apps/details?id=com.motoplus4.J_KeyBoardKanaPlus&hl=ja</a><br>
 公開版以降はセキュリティ情報等を含むためコードは掲載していません。<br>
 こちの方が改善が進んでいます。<br>
 
