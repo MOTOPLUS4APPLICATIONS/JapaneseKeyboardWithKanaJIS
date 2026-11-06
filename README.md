@@ -29,6 +29,9 @@ https://play.google.com/store/apps/details?id=com.motoplus4.J_KeyBoardKanaPlus&h
 1. 文字をもう少し大きく。
 2. 選択中文字のホバー表示
 
+Google Play Store版はこちらです。
+<a herf="https://play.google.com/store/apps/details?id=com.motoplus4.J_KeyBoardKanaPlus&hl=ja">https://play.google.com/store/apps/details?id=com.motoplus4.J_KeyBoardKanaPlus&hl=ja</a>
+
 以下は本家の説明です。
 
 OasizJapaneseKeyboard
